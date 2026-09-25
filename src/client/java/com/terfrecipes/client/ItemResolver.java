@@ -42,6 +42,9 @@ public final class ItemResolver {
     public static final String SPECIAL_TAG = "terf_recipes_special";
     /** Marks the fully charged copy of a rechargeable item (JEI item list only). */
     public static final String CHARGED_TAG = "terf_recipes_charged";
+    /** Marks the "<machine> structure" icon shown as a station of each recipe tab. */
+    public static final String STRUCTURE_TAG = "terf_recipes_structure";
+    private static final Map<String, ItemStack> MARKER_CACHE = new ConcurrentHashMap<>();
 
     /**
      * Blocks shown as another item: red glazed terracotta is only the "power flowing" state of a
@@ -68,6 +71,8 @@ public final class ItemResolver {
         FLUID_CACHE.clear();
         MATERIAL_CACHE.clear();
         BLOCK_CACHE.clear();
+        STATE_CACHE.clear();
+        MARKER_CACHE.clear();
     }
 
     // ------------------------------------------------------------------ inputs
@@ -462,6 +467,107 @@ public final class ItemResolver {
         return result;
     }
 
+    private static final Map<String, List<net.minecraft.world.level.block.state.BlockState>> STATE_CACHE = new ConcurrentHashMap<>();
+
+    /**
+     * Block states to draw for a structure block in the 3D view: the exact state written in the
+     * datapack ("granite_slab[type=double]"), or every block of a tag (shown in turn).
+     */
+    public static List<net.minecraft.world.level.block.state.BlockState> blockStates(Multiblock.BlockSpec spec) {
+        List<net.minecraft.world.level.block.state.BlockState> cached = STATE_CACHE.get(spec.raw());
+        if (cached != null) return cached;
+        List<net.minecraft.world.level.block.state.BlockState> out = new ArrayList<>();
+        if (spec.isTag()) {
+            for (String alt : spec.alternatives()) {
+                if (alt.startsWith("#")) {
+                    Identifier tagId = normalize(alt.substring(1));
+                    if (tagId == null) continue;
+                    var key = net.minecraft.tags.TagKey.create(net.minecraft.core.registries.Registries.BLOCK, tagId);
+                    for (var holder : BuiltInRegistries.BLOCK.getTagOrEmpty(key)) out.add(displayState(holder.value().defaultBlockState()));
+                } else {
+                    Identifier id = normalize(alt);
+                    if (id != null) BuiltInRegistries.BLOCK.getOptional(id).ifPresent(bl -> out.add(displayState(bl.defaultBlockState())));
+                }
+            }
+        } else {
+            String text = spec.states().isEmpty() ? spec.id() : spec.id() + "[" + spec.states() + "]";
+            try {
+                out.add(displayState(net.minecraft.commands.arguments.blocks.BlockStateParser
+                        .parseForBlock(BuiltInRegistries.BLOCK, text, false).blockState()));
+            } catch (Exception e) {
+                Identifier id = normalize(spec.id());
+                if (id != null) BuiltInRegistries.BLOCK.getOptional(id).ifPresent(bl -> out.add(displayState(bl.defaultBlockState())));
+            }
+        }
+        List<net.minecraft.world.level.block.state.BlockState> result = List.copyOf(out);
+        STATE_CACHE.put(spec.raw(), result);
+        return result;
+    }
+
+    /**
+     * Connects iron bars / panes / fences / walls to their neighbours in the structure, like they
+     * would be once placed (the datapack only stores their default, unconnected state).
+     */
+    public static net.minecraft.world.level.block.state.BlockState connected(net.minecraft.world.level.block.state.BlockState state,
+            java.util.function.Function<net.minecraft.core.Direction, net.minecraft.world.level.block.state.BlockState> neighbour) {
+        var block = state.getBlock();
+        boolean cross = block instanceof net.minecraft.world.level.block.CrossCollisionBlock;
+        boolean wall = block instanceof net.minecraft.world.level.block.WallBlock;
+        if (!cross && !wall) return state;
+        boolean[] link = new boolean[4];
+        net.minecraft.core.Direction[] dirs = {net.minecraft.core.Direction.NORTH, net.minecraft.core.Direction.EAST,
+                net.minecraft.core.Direction.SOUTH, net.minecraft.core.Direction.WEST};
+        for (int i = 0; i < 4; i++) {
+            var n = neighbour.apply(dirs[i]);
+            if (n == null || n.isAir()) continue;
+            var nb = n.getBlock();
+            boolean sameFamily = cross ? nb.getClass() == block.getClass()
+                    || (nb instanceof net.minecraft.world.level.block.CrossCollisionBlock && !(nb instanceof net.minecraft.world.level.block.FenceBlock)
+                    && !(block instanceof net.minecraft.world.level.block.FenceBlock))
+                    : nb instanceof net.minecraft.world.level.block.WallBlock;
+            boolean sturdy;
+            try {
+                sturdy = n.isFaceSturdy(net.minecraft.world.level.EmptyBlockGetter.INSTANCE, net.minecraft.core.BlockPos.ZERO, dirs[i].getOpposite());
+            } catch (RuntimeException e) {
+                sturdy = false;
+            }
+            link[i] = sameFamily || sturdy;
+        }
+        try {
+            if (cross) {
+                for (int i = 0; i < 4; i++) {
+                    var prop = net.minecraft.world.level.block.CrossCollisionBlock.PROPERTY_BY_DIRECTION.get(dirs[i]);
+                    if (state.hasProperty(prop)) state = state.setValue(prop, link[i]);
+                }
+            } else {
+                for (int i = 0; i < 4; i++) {
+                    var prop = net.minecraft.world.level.block.WallBlock.PROPERTY_BY_DIRECTION.get(dirs[i]);
+                    if (state.hasProperty(prop)) state = state.setValue(prop, link[i]
+                            ? net.minecraft.world.level.block.state.properties.WallSide.LOW
+                            : net.minecraft.world.level.block.state.properties.WallSide.NONE);
+                }
+                var above = neighbour.apply(net.minecraft.core.Direction.UP);
+                boolean straight = (link[0] && link[2] && !link[1] && !link[3]) || (link[1] && link[3] && !link[0] && !link[2]);
+                boolean post = !straight || (above != null && above.getBlock() instanceof net.minecraft.world.level.block.WallBlock);
+                if (state.hasProperty(net.minecraft.world.level.block.WallBlock.UP)) {
+                    state = state.setValue(net.minecraft.world.level.block.WallBlock.UP, post);
+                }
+            }
+        } catch (RuntimeException ignored) {
+            // unexpected properties: keep what we have
+        }
+        return state;
+    }
+
+    /** Same substitution as {@link #displayItem}: a powered wire corner is a double High Voltage Conductor Slab. */
+    private static net.minecraft.world.level.block.state.BlockState displayState(net.minecraft.world.level.block.state.BlockState state) {
+        if (state.is(net.minecraft.world.level.block.Blocks.RED_GLAZED_TERRACOTTA)) {
+            return net.minecraft.world.level.block.Blocks.GRANITE_SLAB.defaultBlockState()
+                    .setValue(net.minecraft.world.level.block.SlabBlock.TYPE, net.minecraft.world.level.block.state.properties.SlabType.DOUBLE);
+        }
+        return state;
+    }
+
     private static void addBlockItem(net.minecraft.world.level.block.Block block, List<ItemStack> out) {
         Item item = block.asItem();
         if (item == Items.AIR) {
@@ -475,7 +581,40 @@ public final class ItemResolver {
         }
         item = displayItem(item);
         for (ItemStack s : out) if (s.getItem() == item) return;
-        out.add(new ItemStack(item));
+        ItemStack stack = new ItemStack(item);
+        if (block == net.minecraft.world.level.block.Blocks.WATER || block == net.minecraft.world.level.block.Blocks.LAVA) {
+            // a source block, not a bucket item: the bucket only stands for it in the slot
+            boolean water = block == net.minecraft.world.level.block.Blocks.WATER;
+            stack.set(DataComponents.ITEM_NAME, Component.literal(water ? "Water Source" : "Lava Source")
+                    .withStyle(water ? ChatFormatting.AQUA : ChatFormatting.GOLD));
+            stack.set(DataComponents.LORE, new ItemLore(List.of(
+                    Component.literal("Source block (place it with a bucket)").withStyle(ChatFormatting.GRAY))));
+        }
+        out.add(stack);
+    }
+
+    /**
+     * "<Machine> - Structure": a structure block drawn with the machine's icon. Shown next to the
+     * recipes of a machine (JEI station column); clicking it opens the machine's structure page,
+     * which has it as an invisible output.
+     */
+    public static ItemStack structureMarker(String machine) {
+        return MARKER_CACHE.computeIfAbsent(machine, m -> {
+            var def = TerfDataManager.defs().get(m);
+            String name = def.name != null ? def.name : com.terfrecipes.data.MachineDefs.prettify(m);
+            ItemStack icon = com.terfrecipes.client.jei.MachineCategory.iconStack(m, def);
+            ItemStack stack = new ItemStack(Items.STRUCTURE_BLOCK);
+            Identifier model = icon.isEmpty() ? null : icon.get(DataComponents.ITEM_MODEL);
+            if (model != null) stack.set(DataComponents.ITEM_MODEL, model);
+            stack.set(DataComponents.ITEM_NAME, Component.literal(name + " - Structure").withStyle(ChatFormatting.GOLD));
+            stack.set(DataComponents.LORE, new ItemLore(List.of(
+                    Component.literal("R / left click: how to build it").withStyle(ChatFormatting.GRAY),
+                    Component.literal("U / right click: what it makes").withStyle(ChatFormatting.GRAY))));
+            CompoundTag tag = new CompoundTag();
+            tag.putString(STRUCTURE_TAG, m);
+            stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
+            return stack;
+        });
     }
 
     /** Subtype used by JEI to tell TERF items apart: custom_data id / fluid / special marker. */
@@ -487,6 +626,7 @@ public final class ItemResolver {
                 .map(id -> tag.getBoolean(CHARGED_TAG).orElse(false) ? id + "#charged" : id)
                 .or(() -> tag.getString(FLUID_TAG).map(s -> "fluid:" + s))
                 .or(() -> tag.getString(SPECIAL_TAG).map(s -> "special:" + s))
+                .or(() -> tag.getString(STRUCTURE_TAG).map(s -> "structure:" + s))
                 .orElse(null);
     }
 }

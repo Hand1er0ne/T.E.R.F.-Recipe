@@ -32,6 +32,7 @@ import java.util.stream.Stream;
  *     <li>{@code config/terf-recipes/}: a startup.mcfunction, a datapack zip or a datapack folder</li>
  *     <li>resource packs downloaded from the current server, when the server ships the combined
  *     TERF zip (datapack + resource pack) as its resource pack</li>
+ *     <li>the copy downloaded from the datapack's GitHub repository ({@link GithubUpdater})</li>
  *     <li>the copy bundled in the mod jar at build time</li>
  * </ol>
  */
@@ -41,6 +42,12 @@ public final class TerfDataManager {
     private static volatile MachineDefs defs;
 
     private TerfDataManager() {
+    }
+
+    /** Whether the current data comes from a fallback copy (GitHub / bundled), not from the world or config. */
+    public static boolean usesFallbackCopy() {
+        String d = data.sourceDescription();
+        return d.startsWith("GitHub") || d.startsWith("copy bundled") || data.isEmpty();
     }
 
     public static TerfData data() {
@@ -64,6 +71,12 @@ public final class TerfDataManager {
             candidates.addAll(findSources());
         } catch (RuntimeException e) {
             TERFRecipes.LOGGER.error("[TERF Recipes] Error while looking for the datapack", e);
+        }
+        try {
+            DatapackSource github = GithubUpdater.source(); // replaces the bundled copy when newer
+            if (github != null) candidates.add(github);
+        } catch (RuntimeException e) {
+            TERFRecipes.LOGGER.warn("[TERF Recipes] Could not open the GitHub copy", e);
         }
         candidates.add(new DatapackSource.Bundled(TerfDataManager.class.getClassLoader()));
 

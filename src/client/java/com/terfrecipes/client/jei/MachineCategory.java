@@ -63,7 +63,7 @@ public class MachineCategory implements IRecipeCategory<TerfRecipe> {
         this.machine = machine;
         this.def = def;
         this.type = type;
-        this.icon = guiHelper.createDrawableIngredient(VanillaTypes.ITEM_STACK, iconStack(def));
+        this.icon = guiHelper.createDrawableIngredient(VanillaTypes.ITEM_STACK, iconStack(machine, def));
         this.grid = "grid".equals(def.layout);
 
         int maxIn = 1;
@@ -91,9 +91,21 @@ public class MachineCategory implements IRecipeCategory<TerfRecipe> {
         this.height = slotsHeight + (maxLines > 0 ? 4 + maxLines * LINE_H : 0);
     }
 
-    public static ItemStack iconStack(MachineDefs.MachineDef def) {
-        String key = def.icon == null ? "terf:multiblock_core" : def.icon;
-        List<ItemStack> stacks = ItemResolver.resolveKey(key);
+    /** Icon of a machine: "icon" of machines.json, else the block the core goes in, else the _default icon. */
+    public static ItemStack iconStack(String machine, MachineDefs.MachineDef def) {
+        if (def.icon != null) {
+            List<ItemStack> stacks = ItemResolver.resolveKey(def.icon);
+            if (!stacks.isEmpty()) return stacks.get(0);
+        }
+        for (com.terfrecipes.data.Multiblock mb : com.terfrecipes.client.TerfDataManager.data().multiblocks()) {
+            if (!machine.equals(mb.machine())) continue;
+            com.terfrecipes.data.Multiblock.BlockSpec core = mb.blocks().get(new com.terfrecipes.data.Multiblock.Pos(0, 0, 0));
+            if (core == null) continue;
+            List<ItemStack> stacks = ItemResolver.blockStacks(core);
+            if (!stacks.isEmpty() && !stacks.get(0).is(net.minecraft.world.item.Items.BARRIER)) return stacks.get(0);
+        }
+        String fallback = com.terfrecipes.client.TerfDataManager.defs().get(MachineDefs.DEFAULT_KEY).icon;
+        List<ItemStack> stacks = ItemResolver.resolveKey(fallback != null ? fallback : "terf:multiblock_core");
         return stacks.isEmpty() ? ItemStack.EMPTY : stacks.get(0);
     }
 

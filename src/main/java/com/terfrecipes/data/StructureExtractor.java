@@ -42,6 +42,18 @@ public final class StructureExtractor {
             "(^|/)(operation|complete|explosion|explode|states|visuals|particle|sound|destroy|kill|stop|shoot|finishing|reboot\\w*|ring|meltdown|detonation|emergency_controls|calculations|test)(/|$|_)");
     private static final String FLUID_PORT_FN = "terf:require/observer_fluid_checks";
 
+    /*
+     * datapipes_lib turns the corner blocks of a pipe network into red_glazed_terracotta for the
+     * duration of a transfer, then back. So a check like "if block ^1 ^ ^ red_glazed_terracotta"
+     * means "a pipe corner connected to the network is here", never a real red terracotta block.
+     */
+    static final String ACTIVE_PIPE = "minecraft:red_glazed_terracotta";
+    /** Corner of the power wire preset (iron chains between double granite slabs). */
+    static final String POWER_CORNER = "granite_slab[type=double]";
+    /** Corner of the lightning_rod / copper_wire fluid pipe presets. */
+    static final String FLUID_CORNER = "waxed_cut_copper";
+    private static final Pattern CUSTOM_PIPE_CORNER = Pattern.compile("custom_pipe/pipes_on\\s*\\{[^}]*corner:\"?([a-z0-9_:]+)");
+
     private final Function<String, String> functionReader;
     private final Function<String, String> dataReader;
     private final MachineDefs defs;
@@ -92,12 +104,14 @@ public final class StructureExtractor {
             c.line(function, 0);
         }
 
-        if (c.blocks.isEmpty()) return null;
         MachineDefs.MachineDef def = defs.get(machine);
+        patch(c.blocks, def);
+        if (c.blocks.isEmpty()) return null;
         String name = def.name != null ? def.name : MachineDefs.prettify(machine);
         if (variant != null) name += " (" + variant + ")";
 
         List<String> notes = new ArrayList<>(c.notes);
+        if (def.structureNotes != null) notes.addAll(0, def.structureNotes);
         Multiblock tmp = new Multiblock(id, machine, name, c.blocks, notes, false);
         int dx = tmp.maxX() - tmp.minX() + 1;
         int dy = tmp.maxY() - tmp.minY() + 1;
@@ -121,6 +135,8 @@ public final class StructureExtractor {
         final List<String> notes = new ArrayList<>();
         boolean dynamic;
         boolean fluidNote;
+        /** Corner block of the pipe used by the fluid entry being read. */
+        String fluidCorner = FLUID_CORNER;
 
         Collector(String machine) {
             this.machine = machine;
@@ -131,7 +147,7 @@ public final class StructureExtractor {
             if (fn.equals(FLUID_PORT_FN)) {
                 put(new Multiblock.Pos(ox, oy, oz), spec("observer", Multiblock.Role.FLUID));
                 if (!fluidNote) {
-                    notes.add("Fluid ports: observer facing outwards with red glazed terracotta behind it");
+                    notes.add("Fluid port: observer facing outwards, pipe corner behind it");
                     fluidNote = true;
                 }
                 return;
@@ -139,10 +155,38 @@ public final class StructureExtractor {
             Matcher m = MACHINE_FN.matcher(fn);
             if (!m.matches() || !m.group(1).equals(machine)) return;
             if (IGNORED_FN.matcher(m.group(2)).find() || depth > MAX_DEPTH) return;
+            List<String> ignore = defs.get(machine).structureIgnore;
+            if (ignore != null) for (String ig : ignore) if (m.group(2).equals(ig) || m.group(2).endsWith("/" + ig)) return;
             if (!visited.add(fn + "@" + ox + "," + oy + "," + oz)) return;
             String body = functionReader.apply(fn);
             if (body == null) return;
-            for (String line : StorageEmulator.joinContinuations(body)) {
+            List<String> lines = StorageEmulator.joinContinuations(body);
+
+            // "raycast" functions call themselves one step further until they find something:
+            // with raycastSteps set in machines.json, show the result that many steps away (once)
+            Integer steps = defs.get(machine).raycastSteps;
+            if (steps != null) {
+                int[] step = selfStep(lines, fn);
+                if (step != null) {
+                    List<String> rest = new ArrayList<>();
+                    for (String l : lines) if (!l.contains("function " + fn) && !l.contains("function " + fnId)) rest.add(l);
+                    lines = rest;
+                    ox += step[0] * steps;
+                    oy += step[1] * steps;
+                    oz += step[2] * steps;
+                }
+            }
+            // "execute if block A run return 1 / execute if block B run return 1 / return fail":
+            // any ONE of them is enough, show the first as an example
+            if (isAlternatives(lines)) {
+                for (String l : lines) {
+                    if (l.strip().endsWith("run return 1")) {
+                        lines = List.of(l);
+                        break;
+                    }
+                }
+            }
+            for (String line : lines) {
                 if (line.startsWith("$")) continue; // macro: runtime values
                 line(line, depth, ox, oy, oz);
             }
@@ -157,6 +201,7 @@ public final class StructureExtractor {
             Matcher mb = MB_FUNCTION.matcher(line);
             if (mb.find()) chain(unquote(mb.group(1)), ox, oy, oz, Multiblock.Role.NORMAL, depth);
             Matcher ck = QUOTED_CHECKS.matcher(line);
+            fluidCorner = pipeCorner(line);
             while (ck.find()) {
                 Multiblock.Role role = line.contains("data.power") ? Multiblock.Role.POWER
                         : line.contains("data.fluids") ? Multiblock.Role.FLUID : Multiblock.Role.NORMAL;
@@ -214,6 +259,15 @@ public final class StructureExtractor {
                                 Multiblock.Role r = role;
                                 Multiblock.Pos pos = new Multiblock.Pos(x + a, y + b, z + cc);
                                 if (role == Multiblock.Role.CORE && !(a == 0 && b == 0 && cc == 0)) r = Multiblock.Role.NORMAL;
+                                if (spec(pred, r).id().equals(ACTIVE_PIPE)) {
+                                    // an energized pipe corner: show the block the player really places
+                                    if (r == Multiblock.Role.FLUID) {
+                                        pred = fluidCorner;
+                                    } else {
+                                        pred = POWER_CORNER;
+                                        r = Multiblock.Role.POWER;
+                                    }
+                                }
                                 put(pos, spec(pred, r));
                             }
                             i += 5;
@@ -260,6 +314,58 @@ public final class StructureExtractor {
     }
 
     // ------------------------------------------------------------------ helpers
+
+    /** Offset of the "positioned" on the line where a function calls itself, or null. */
+    private static int[] selfStep(List<String> lines, String fn) {
+        String shortFn = fn.startsWith("minecraft:") ? fn.substring(10) : fn;
+        for (String l : lines) {
+            if (!l.contains("function " + fn) && !l.contains("function " + shortFn)) continue;
+            List<String> t = tokenize(l);
+            for (int i = 0; i + 3 < t.size(); i++) {
+                if (!t.get(i).equals("positioned")) continue;
+                Integer a = coord(t.get(i + 1)), b = coord(t.get(i + 2)), c = coord(t.get(i + 3));
+                if (a != null && b != null && c != null) return new int[]{a, b, c};
+            }
+        }
+        return null;
+    }
+
+    /** A function made of "... run return 1" alternatives (then "return fail"). */
+    static boolean isAlternatives(List<String> lines) {
+        int alternatives = 0;
+        for (String raw : lines) {
+            String l = raw.strip();
+            if (l.isEmpty() || l.startsWith("#")) continue;
+            if (l.startsWith("execute ") && l.endsWith(" run return 1")) alternatives++;
+            else if (!l.equals("return fail") && !l.equals("return 0")) return false;
+        }
+        return alternatives >= 2;
+    }
+
+    /** Blocks that only mean "must be empty" (or a technical state): not shown. */
+    private static final Set<String> NOT_SHOWN = Set.of("minecraft:air", "minecraft:cave_air", "minecraft:void_air",
+            "minecraft:light", "minecraft:piston_head", "minecraft:moving_piston", "#minecraft:air");
+
+    /** Removes the "empty" blocks and applies the structureRemove / structureAdd patches of machines.json. */
+    private void patch(Map<Multiblock.Pos, Multiblock.BlockSpec> blocks, MachineDefs.MachineDef def) {
+        blocks.entrySet().removeIf(e -> NOT_SHOWN.contains(e.getValue().id()));
+        if (def.structureRemoveBlocks != null && !def.structureRemoveBlocks.isEmpty()) {
+            Set<String> ids = new HashSet<>();
+            for (String id : def.structureRemoveBlocks) ids.add(id.contains(":") ? id : "minecraft:" + id);
+            blocks.entrySet().removeIf(e -> ids.contains(e.getValue().id()));
+        }
+        if (def.structureRemove != null) {
+            for (int[] p : def.structureRemove) {
+                if (p != null && p.length == 3) blocks.remove(new Multiblock.Pos(p[0], p[1], p[2]));
+            }
+        }
+        if (def.structureAdd != null) {
+            for (MachineDefs.BlockPatch add : def.structureAdd) {
+                if (add == null || add.pos == null || add.pos.length != 3 || add.block == null) continue;
+                blocks.put(new Multiblock.Pos(add.pos[0], add.pos[1], add.pos[2]), spec(add.block, Multiblock.Role.NORMAL));
+            }
+        }
+    }
 
     Multiblock.BlockSpec spec(String predicate, Multiblock.Role role) {
         String raw = predicate.replaceAll("['\"}]+$", "").trim();
@@ -316,6 +422,14 @@ public final class StructureExtractor {
         List<String> result = List.copyOf(new java.util.LinkedHashSet<>(out));
         tagCache.put(tagId, result);
         return result;
+    }
+
+    /** Corner block of the pipe preset named on a fluid definition line. */
+    static String pipeCorner(String line) {
+        Matcher m = CUSTOM_PIPE_CORNER.matcher(line);
+        if (m.find()) return m.group(1);
+        if (line.contains("pipe_presets/wire")) return POWER_CORNER;
+        return FLUID_CORNER; // lightning_rod / copper_wire presets and default
     }
 
     /** A chain that aborts when its conditions pass: its "unless" conditions are requirements. */

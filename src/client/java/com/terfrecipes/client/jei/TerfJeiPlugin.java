@@ -49,6 +49,7 @@ public class TerfJeiPlugin implements IModPlugin {
     /** Multiblock pages currently shown. */
     private static List<Multiblock> shownPages = List.of();
     private static boolean multiblockCategoryRegistered;
+    private static @Nullable MultiblockCategory multiblockCategory;
 
     @Override
     public Identifier getPluginUid() {
@@ -72,7 +73,8 @@ public class TerfJeiPlugin implements IModPlugin {
 
         // TERF items are vanilla items (recovery_compass, carrot_on_a_stick...) told apart by custom_data.id
         Set<Item> bases = new LinkedHashSet<>(List.of(Items.RECOVERY_COMPASS, Items.CARROT_ON_A_STICK,
-                Items.BUCKET, Items.WATER_BUCKET, Items.LAVA_BUCKET, Items.BARRIER, Items.NETHER_STAR));
+                Items.BUCKET, Items.WATER_BUCKET, Items.LAVA_BUCKET, Items.BARRIER, Items.NETHER_STAR,
+                Items.STRUCTURE_BLOCK));
         for (ItemStack stack : ItemResolver.allMaterials()) bases.add(stack.getItem());
         for (Item item : bases) {
             try {
@@ -89,6 +91,11 @@ public class TerfJeiPlugin implements IModPlugin {
         List<ItemStack> extra = new ArrayList<>(ItemResolver.allMaterials());
         extra.addAll(ItemResolver.chargedVariants()); // e.g. a charged Electron Bomb, give-only
         extra.addAll(ItemResolver.allFluids()); // filled syringes, searchable by fluid name
+        // one "<Machine> - Structure" per machine: search "structure" (or the machine name) in JEI,
+        // then R / left click = how to build it, U / right click = what it makes
+        Set<String> machines = new java.util.TreeSet<>();
+        for (Multiblock mb : TerfDataManager.data().multiblocks()) machines.add(mb.machine());
+        for (String machine : machines) extra.add(ItemResolver.structureMarker(machine));
         registration.addExtraItemStacks(extra);
     }
 
@@ -102,7 +109,8 @@ public class TerfJeiPlugin implements IModPlugin {
                     typeFor(machine), e.getValue(), gui));
         }
         if (!data.multiblocks().isEmpty()) {
-            registration.addRecipeCategories(new MultiblockCategory(data.multiblocks(), gui));
+            multiblockCategory = new MultiblockCategory(data.multiblocks(), gui);
+            registration.addRecipeCategories(multiblockCategory);
             multiblockCategoryRegistered = true;
         }
     }
@@ -152,11 +160,29 @@ public class TerfJeiPlugin implements IModPlugin {
         ItemStack core = data.materials().containsKey("terf:multiblock_core")
                 ? ItemResolver.material("terf:multiblock_core") : ItemStack.EMPTY;
         for (String machine : data.recipesByMachine().keySet()) {
-            ItemStack station = !core.isEmpty() ? core : MachineCategory.iconStack(TerfDataManager.defs().get(machine));
+            // first: "<machine> - Structure" (click = structure page), then the Multiblock Core
+            if (multiblockCategoryRegistered && data.multiblocks().stream().anyMatch(mb -> machine.equals(mb.machine()))) {
+                registration.addCraftingStation(typeFor(machine), ItemResolver.structureMarker(machine));
+            }
+            ItemStack station = !core.isEmpty() ? core : MachineCategory.iconStack(machine, TerfDataManager.defs().get(machine));
             if (!station.isEmpty()) registration.addCraftingStation(typeFor(machine), station);
         }
         if (multiblockCategoryRegistered && !core.isEmpty()) {
             registration.addCraftingStation(MultiblockCategory.TYPE, core);
+        }
+    }
+
+    /**
+     * "+" button: machines whose recipes are laid out as a 3x3 grid (the Fabricator) read their
+     * ingredients from a Crafter, so JEI can fill the Crafter's grid from the player's inventory.
+     */
+    @Override
+    public void registerRecipeTransferHandlers(mezz.jei.api.registration.IRecipeTransferRegistration registration) {
+        for (String machine : TerfDataManager.data().recipesByMachine().keySet()) {
+            if (!"grid".equals(TerfDataManager.defs().get(machine).layout)) continue;
+            // vanilla clicks only: works on servers without JEI
+            registration.addRecipeTransferHandler(new CrafterTransferHandler(typeFor(machine), registration.getTransferHelper()),
+                    typeFor(machine));
         }
     }
 
@@ -233,6 +259,40 @@ public class TerfJeiPlugin implements IModPlugin {
             if (!shownPages.isEmpty()) rt.getRecipeManager().addRecipes(MultiblockCategory.TYPE, new ArrayList<>(shownPages));
         }
         return missing;
+    }
+
+    // ------------------------------------------------------------------ shortcuts between pages
+
+    private static List<Multiblock> structuresOf(String machine) {
+        List<Multiblock> out = new ArrayList<>();
+        for (Multiblock mb : shownPages) if (machine.equals(mb.machine())) out.add(mb);
+        return out;
+    }
+
+    /** Whether the machine has a structure page ("how to build it"). */
+    public static boolean hasStructure(String machine) {
+        return runtime != null && multiblockCategory != null && !structuresOf(machine).isEmpty();
+    }
+
+    /** Opens the structure page(s) of a machine. */
+    public static void showStructure(String machine) {
+        IJeiRuntime rt = runtime;
+        List<Multiblock> pages = structuresOf(machine);
+        if (rt == null || multiblockCategory == null || pages.isEmpty()) return;
+        rt.getRecipesGui().showRecipes(multiblockCategory, pages, List.of());
+    }
+
+    /** Whether the machine has recipes shown in JEI. */
+    public static boolean hasRecipes(String machine) {
+        return runtime != null && SHOWN.containsKey(machine) && TYPES.containsKey(machine);
+    }
+
+    /** Opens the recipe tab of a machine. */
+    public static void showRecipes(String machine) {
+        IJeiRuntime rt = runtime;
+        IRecipeType<TerfRecipe> type = TYPES.get(machine);
+        if (rt == null || type == null || !SHOWN.containsKey(machine)) return;
+        rt.getRecipesGui().showTypes(List.of(type));
     }
 
     public static boolean isRuntimeAvailable() {

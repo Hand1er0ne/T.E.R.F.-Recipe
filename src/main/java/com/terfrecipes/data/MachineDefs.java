@@ -59,6 +59,26 @@ public final class MachineDefs {
         public boolean hideRecipes;
         /** Recipe ids to hide, without the "machine/" prefix ("*" = anything). */
         public List<String> hiddenRecipes = List.of();
+        /** Multiblock view: show self-repeating ("raycast") checks this many steps away (e.g. a gap). */
+        public Integer raycastSteps;
+        /** Multiblock view: blocks to add (not checked by the datapack but needed / useful to show). */
+        public List<BlockPatch> structureAdd = List.of();
+        /** Multiblock view: positions [x, y, z] to remove. */
+        public List<int[]> structureRemove = List.of();
+        /** Multiblock view: block ids to remove everywhere ("slime_block"). */
+        public List<String> structureRemoveBlocks = List.of();
+        /** Multiblock view: functions of the machine not to follow (e.g. dynamic flood fills). */
+        public List<String> structureIgnore = List.of();
+        /** Multiblock view: lines shown under the structure. */
+        public List<String> structureNotes = List.of();
+        /** Multiblock view: extra tooltip per block id ("loom": "Server: ..."). */
+        public Map<String, String> blockTips = new LinkedHashMap<>();
+    }
+
+    /** {"pos": [x, y, z], "block": "smooth_stone"} (coordinates relative to the core: left, up, front). */
+    public static final class BlockPatch {
+        public int[] pos;
+        public String block;
     }
 
     private final Map<String, MachineDef> defs;
@@ -72,7 +92,7 @@ public final class MachineDefs {
         if (def != null) return def;
         MachineDef fallback = defs.getOrDefault(DEFAULT_KEY, new MachineDef());
         MachineDef copy = new MachineDef();
-        copy.icon = fallback.icon;
+        // no icon: the client shows the machine's core block (then the _default icon)
         copy.params = fallback.params;
         copy.outputKeys = fallback.outputKeys;
         copy.name = prettify(machine);

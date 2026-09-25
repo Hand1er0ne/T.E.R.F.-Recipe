@@ -2,6 +2,7 @@
   "//": "Presentation hints only: recipes always come from the datapack. Unknown machines use _default. Copy to config/terf-recipes/machines.json to override.",
   "//structure": "\"structure\": auto (default) | layers | list | hidden  -> how the multiblock is shown in the TERF Multiblocks tab",
   "//hide": "\"hideRecipes\": true hides a machine recipe tab (structure kept); \"hiddenRecipes\": [\"id\", \"glob*\"] hides single recipes (id without the machine/ prefix)",
+  "//patch": "Multiblock view fixes: \"raycastSteps\": n (self-repeating checks shown n steps away), \"structureAdd\": [{\"pos\":[x,y,z],\"block\":\"id[states]\"}], \"structureRemove\": [[x,y,z]] (x = left, y = up, z = front of the core)",
   "_default": {
     "icon": "terf:multiblock_core",
     "params": {
@@ -107,7 +108,8 @@
     "structure": "list",
     "hiddenRecipes": [
       "minecraft:repeating_command_block"
-    ]
+    ],
+    "raycastSteps": 2
   },
   "rolling_mill": {
     "name": "Rolling Mill",
@@ -161,7 +163,8 @@
         "label": "Min. extension"
       }
     },
-    "structure": "list"
+    "structure": "hidden",
+    "hideRecipes": true
   },
   "large_fluid_solidifier": {
     "name": "Large Fluid Solidifier",
@@ -194,7 +197,8 @@
       "m": {
         "label": "m"
       }
-    }
+    },
+    "hideRecipes": true
   },
   "stfr": {
     "name": "STFR",
@@ -215,5 +219,230 @@
   "fission_reactor": {
     "name": "Fission Reactor",
     "structure": "list"
+  },
+  "turbine_medium": {
+    "structureAdd": [
+      {
+        "pos": [
+          0,
+          1,
+          2
+        ],
+        "block": "smooth_stone"
+      },
+      {
+        "pos": [
+          0,
+          1,
+          6
+        ],
+        "block": "smooth_stone"
+      },
+      {
+        "pos": [
+          0,
+          1,
+          10
+        ],
+        "block": "smooth_stone"
+      }
+    ]
+  },
+  "security_terminal": {
+    "structureAdd": [
+      {
+        "pos": [
+          0,
+          1,
+          0
+        ],
+        "block": "acacia_wall_sign[facing=south]"
+      }
+    ]
+  },
+  "pressurizer": {
+    "structureRemove": [
+      [
+        -1,
+        0,
+        0
+      ],
+      [
+        0,
+        1,
+        0
+      ],
+      [
+        0,
+        -1,
+        0
+      ],
+      [
+        0,
+        0,
+        1
+      ],
+      [
+        0,
+        0,
+        -1
+      ]
+    ]
+  },
+  "mainframe": {
+    "structureIgnore": [
+      "tick"
+    ],
+    "structureAdd": [
+      {
+        "pos": [
+          1,
+          0,
+          0
+        ],
+        "block": "granite_slab[type=double]"
+      },
+      {
+        "pos": [
+          -1,
+          0,
+          0
+        ],
+        "block": "granite_slab[type=double]"
+      },
+      {
+        "pos": [
+          -1,
+          2,
+          1
+        ],
+        "block": "acacia_wall_sign[facing=south]"
+      },
+      {
+        "pos": [
+          0,
+          2,
+          1
+        ],
+        "block": "acacia_wall_sign[facing=south]"
+      },
+      {
+        "pos": [
+          1,
+          2,
+          1
+        ],
+        "block": "acacia_wall_sign[facing=south]"
+      },
+      {
+        "pos": [
+          -1,
+          0,
+          -1
+        ],
+        "block": "granite_slab[type=double]"
+      },
+      {
+        "pos": [
+          -1,
+          1,
+          -1
+        ],
+        "block": "loom"
+      },
+      {
+        "pos": [
+          -1,
+          2,
+          -1
+        ],
+        "block": "loom"
+      },
+      {
+        "pos": [
+          -1,
+          3,
+          -1
+        ],
+        "block": "loom"
+      },
+      {
+        "pos": [
+          0,
+          0,
+          -1
+        ],
+        "block": "granite_slab[type=double]"
+      },
+      {
+        "pos": [
+          0,
+          1,
+          -1
+        ],
+        "block": "loom"
+      },
+      {
+        "pos": [
+          0,
+          2,
+          -1
+        ],
+        "block": "loom"
+      },
+      {
+        "pos": [
+          0,
+          3,
+          -1
+        ],
+        "block": "loom"
+      },
+      {
+        "pos": [
+          1,
+          0,
+          -1
+        ],
+        "block": "granite_slab[type=double]"
+      },
+      {
+        "pos": [
+          1,
+          1,
+          -1
+        ],
+        "block": "loom"
+      },
+      {
+        "pos": [
+          1,
+          2,
+          -1
+        ],
+        "block": "loom"
+      },
+      {
+        "pos": [
+          1,
+          3,
+          -1
+        ],
+        "block": "loom"
+      }
+    ],
+    "structureNotes": [
+      "Example servers: slab blocks touching the lodestone, up to 3 looms on each"
+    ],
+    "blockTips": {
+      "granite_slab": "Server base: 2 slabs = 1 block, must touch the lodestone or another server base. Add as many as you want",
+      "loom": "Server: up to 3 looms stacked on a server base, each one adds capacity",
+      "acacia_wall_sign": "Screen on the observer"
+    }
+  },
+  "multi_piston": {
+    "structureRemoveBlocks": [
+      "slime_block"
+    ]
   }
 }

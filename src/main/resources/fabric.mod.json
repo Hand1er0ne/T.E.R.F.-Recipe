@@ -3,15 +3,14 @@
 	"id": "terf-recipes",
 	"version": "${version}",
 	"name": "TERF Recipes",
-	"description": "Shows the machine recipes and custom items of the TERF datapack in JEI, read dynamically from the datapack itself.",
+	"description": "Shows the recipes, custom items, fluids and multiblock structures of the TERF datapack in JEI, with a 3D structure viewer and in-world build holograms. TERF datapack by jona23.",
 	"authors": [
-		"Me!"
+		"Hand1er0ne"
 	],
 	"contact": {
-		"homepage": "https://fabricmc.net/",
-		"sources": "https://github.com/FabricMC/fabric-example-mod"
+		"homepage": "https://modrinth.com/mod/terf-recipes"
 	},
-	"license": "CC0-1.0",
+	"license": "ARR",
 	"icon": "assets/terf-recipes/icon.png",
 	"environment": "*",
 	"entrypoints": {
