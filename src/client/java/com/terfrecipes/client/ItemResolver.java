@@ -40,6 +40,16 @@ public final class ItemResolver {
     /** custom_data key we put on fluid / special display stacks so JEI can tell them apart. */
     public static final String FLUID_TAG = "terf_recipes_fluid";
     public static final String SPECIAL_TAG = "terf_recipes_special";
+    /** Marks the fully charged copy of a rechargeable item (JEI item list only). */
+    public static final String CHARGED_TAG = "terf_recipes_charged";
+
+    /**
+     * Blocks shown as another item: red glazed terracotta is only the "power flowing" state of a
+     * power wire corner (datapipes_lib), the block to place is the High Voltage Conductor Slab.
+     */
+    private static Item displayItem(Item item) {
+        return item == Items.RED_GLAZED_TERRACOTTA ? Items.GRANITE_SLAB : item;
+    }
 
     /** Components kept when a full decode fails (e.g. a registry entry missing on this client). */
     private static final Set<String> SAFE_COMPONENTS = Set.of(
@@ -80,7 +90,7 @@ public final class ItemResolver {
         if (data.materials().containsKey(key)) return List.of(material(key));
 
         Item item = findItem(key);
-        if (item != null) return List.of(new ItemStack(item));
+        if (item != null) return List.of(new ItemStack(displayItem(item)));
 
         List<String> tagged = data.materialsWithTag(key);
         if (!tagged.isEmpty()) {
@@ -126,7 +136,7 @@ public final class ItemResolver {
                         if (block.isPresent() && block.get().asItem() != Items.AIR) item = block.get().asItem();
                     }
                 }
-                yield item != null ? new ItemStack(item) : unknown(output.key());
+                yield item != null ? new ItemStack(displayItem(item)) : unknown(output.key());
             }
             case FLUID -> fluid(output.key());
             case SPECIAL -> special(output);
@@ -209,22 +219,117 @@ public final class ItemResolver {
         return out;
     }
 
+    /**
+     * Fully charged copies of rechargeable items the datapack gives empty (e.g. the Electron
+     * Bomb, summoned with damage = max_damage). Only added to JEI's item list, not to recipes.
+     */
+    public static List<ItemStack> chargedVariants() {
+        List<ItemStack> out = new ArrayList<>();
+        TerfData data = TerfDataManager.data();
+        for (Map.Entry<String, Map<String, Object>> e : data.materials().entrySet()) {
+            if (data.isItemHidden(e.getKey()) || !isRechargeable(e.getValue())) continue;
+            ItemStack base = material(e.getKey());
+            Integer damage = base.get(DataComponents.DAMAGE);
+            if (damage == null || damage <= 0) continue;
+            ItemStack charged = base.copy();
+            charged.set(DataComponents.DAMAGE, 0);
+            CustomData cd = charged.get(DataComponents.CUSTOM_DATA);
+            CompoundTag tag = cd != null ? cd.copyTag() : new CompoundTag();
+            tag.putBoolean(CHARGED_TAG, true);
+            charged.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
+            List<Component> lore = new ArrayList<>();
+            ItemLore old = charged.get(DataComponents.LORE);
+            if (old != null) lore.addAll(old.lines());
+            lore.add(Component.literal("Fully charged").withStyle(ChatFormatting.GREEN));
+            charged.set(DataComponents.LORE, new ItemLore(lore));
+            out.add(charged);
+        }
+        return out;
+    }
+
+    /** custom_data.rechargable (spelled that way in the datapack). */
+    @SuppressWarnings("unchecked")
+    public static boolean isRechargeable(Map<String, Object> item) {
+        return item.get("components") instanceof Map<?, ?> c && c.get("custom_data") instanceof Map<?, ?> cd
+                && (((Map<String, Object>) cd).containsKey("rechargable") || ((Map<String, Object>) cd).containsKey("rechargeable"));
+    }
+
+    /** Whether a stack is a TERF item carrying custom_data.rechargable. */
+    public static boolean isRechargeable(ItemStack stack) {
+        CustomData cd = stack.get(DataComponents.CUSTOM_DATA);
+        if (cd == null || cd.isEmpty()) return false;
+        CompoundTag tag = cd.copyTag();
+        return tag.contains("rechargable") || tag.contains("rechargeable");
+    }
+
+    /**
+     * Fluids are shown as a TERF Syringe filled with the fluid, like the datapack does: the syringe
+     * model is tinted with custom_model_data colors[0] and its fill level is floats[0] (0-1000).
+     * Name, color and formula come from {@code terf:constants fluid_dictionary}. Falls back to a
+     * named bucket when the datapack has no syringe.
+     */
+    @SuppressWarnings("unchecked")
     public static ItemStack fluid(String fluidId) {
-        return FLUID_CACHE.computeIfAbsent(fluidId, id -> { // no nested cache access inside
-            Item base = switch (id) {
+        ItemStack cached = FLUID_CACHE.get(fluidId);
+        if (cached != null) return cached;
+        TerfData data = TerfDataManager.data();
+        Map<String, Object> info = data.fluids().get(fluidId);
+        String name = info != null && info.get("name") instanceof String n ? n : Format.fluidName(fluidId);
+        String hex = info != null && info.get("color_hex") instanceof String h ? h : "#55FFFF";
+        Integer colorDec = info != null ? Snbt.asInt(info.get("color_dec")) : null;
+
+        ItemStack stack = ItemStack.EMPTY;
+        Map<String, Object> syringe = data.materials().get("terf:syringe");
+        if (syringe != null) {
+            Map<String, Object> item = (Map<String, Object>) Snbt.copy(syringe);
+            Map<String, Object> comps = item.get("components") instanceof Map<?, ?> c
+                    ? (Map<String, Object>) c : new LinkedHashMap<>();
+            item.put("components", comps);
+            Map<String, Object> cmd = new LinkedHashMap<>();
+            cmd.put("colors", new Snbt.TypedArray('I', List.of(new Snbt.Num(String.valueOf(colorDec != null ? colorDec : 0x55FFFF)))));
+            cmd.put("floats", List.of(new Snbt.Num("1000f")));
+            comps.put("custom_model_data", cmd);
+            Map<String, Object> customData = new LinkedHashMap<>();
+            customData.put(FLUID_TAG, fluidId);
+            comps.put("custom_data", customData);
+            comps.remove("item_name");
+            stack = fromItemCompound(item);
+        }
+        if (stack.isEmpty()) {
+            Item base = switch (fluidId) {
                 case "water", "minecraft:water" -> Items.WATER_BUCKET;
                 case "lava", "minecraft:lava" -> Items.LAVA_BUCKET;
                 default -> Items.BUCKET;
             };
-            ItemStack stack = new ItemStack(base);
-            stack.set(DataComponents.ITEM_NAME, Component.literal(Format.fluidName(id)).withStyle(ChatFormatting.AQUA));
-            stack.set(DataComponents.LORE, new ItemLore(List.of(
-                    Component.literal("Fluid: " + id).withStyle(ChatFormatting.DARK_GRAY))));
+            stack = new ItemStack(base);
             CompoundTag tag = new CompoundTag();
-            tag.putString(FLUID_TAG, id);
+            tag.putString(FLUID_TAG, fluidId);
             stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
-            return stack;
-        });
+        }
+
+        net.minecraft.network.chat.TextColor color = net.minecraft.network.chat.TextColor.parseColor(hex).result().orElse(null);
+        net.minecraft.network.chat.MutableComponent title = Component.literal(name);
+        stack.set(DataComponents.ITEM_NAME, color != null ? title.withStyle(st -> st.withColor(color)) : title.withStyle(ChatFormatting.AQUA));
+        List<Component> lore = new ArrayList<>();
+        if (info != null && info.get("chem") instanceof Map<?, ?> chem && chem.get("text") instanceof String formula && !formula.equals("?")) {
+            lore.add(Component.literal(formula).withStyle(ChatFormatting.GRAY));
+        }
+        if (info != null && Snbt.asInt(info.get("temp")) != null) {
+            lore.add(Component.literal(Snbt.asInt(info.get("temp")) + " °C").withStyle(ChatFormatting.DARK_GRAY));
+        }
+        lore.add(Component.literal("Fluid: " + fluidId).withStyle(ChatFormatting.DARK_GRAY));
+        stack.set(DataComponents.LORE, new ItemLore(lore));
+        FLUID_CACHE.put(fluidId, stack);
+        return stack;
+    }
+
+    /** Every fluid of the datapack (added to JEI's item list so they can be searched). */
+    public static List<ItemStack> allFluids() {
+        List<ItemStack> out = new ArrayList<>();
+        for (String id : TerfDataManager.data().fluids().keySet()) {
+            if (!id.equals("empty")) out.add(fluid(id));
+        }
+        return out;
     }
 
     private static ItemStack special(TerfRecipe.Output output) {
@@ -368,6 +473,7 @@ public final class ItemResolver {
                     || block == net.minecraft.world.level.block.Blocks.LAVA_CAULDRON) item = Items.CAULDRON;
             else return;
         }
+        item = displayItem(item);
         for (ItemStack s : out) if (s.getItem() == item) return;
         out.add(new ItemStack(item));
     }
@@ -378,6 +484,7 @@ public final class ItemResolver {
         if (data == null || data.isEmpty()) return null;
         CompoundTag tag = data.copyTag();
         return tag.getString("id")
+                .map(id -> tag.getBoolean(CHARGED_TAG).orElse(false) ? id + "#charged" : id)
                 .or(() -> tag.getString(FLUID_TAG).map(s -> "fluid:" + s))
                 .or(() -> tag.getString(SPECIAL_TAG).map(s -> "special:" + s))
                 .orElse(null);

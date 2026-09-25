@@ -1,6 +1,7 @@
 {
   "//": "Presentation hints only: recipes always come from the datapack. Unknown machines use _default. Copy to config/terf-recipes/machines.json to override.",
   "//structure": "\"structure\": auto (default) | layers | list | hidden  -> how the multiblock is shown in the TERF Multiblocks tab",
+  "//hide": "\"hideRecipes\": true hides a machine recipe tab (structure kept); \"hiddenRecipes\": [\"id\", \"glob*\"] hides single recipes (id without the machine/ prefix)",
   "_default": {
     "icon": "terf:multiblock_core",
     "params": {
@@ -103,7 +104,10 @@
         "label": "Power"
       }
     },
-    "structure": "list"
+    "structure": "list",
+    "hiddenRecipes": [
+      "minecraft:repeating_command_block"
+    ]
   },
   "rolling_mill": {
     "name": "Rolling Mill",
@@ -171,7 +175,8 @@
   "fission_fuel_loader": {
     "name": "Fission Fuel Loader",
     "icon": "minecraft:dispenser",
-    "modeKeys": 1
+    "modeKeys": 1,
+    "hideRecipes": true
   },
   "dem": {
     "name": "DEM",

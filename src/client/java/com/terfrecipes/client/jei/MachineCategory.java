@@ -149,7 +149,7 @@ public class MachineCategory implements IRecipeCategory<TerfRecipe> {
             if (input.kind() == TerfRecipe.InputKind.FLUID) {
                 int amount = input.count();
                 slot.addRichTooltipCallback((view, tooltip) ->
-                        tooltip.add(Component.literal("Amount: " + amount).withStyle(ChatFormatting.AQUA)));
+                        tooltip.add(Component.literal("Amount: " + amount + " mB").withStyle(ChatFormatting.AQUA)));
             } else if (stacks.size() > 1) {
                 slot.addRichTooltipCallback((view, tooltip) ->
                         tooltip.add(Component.literal("Any item tagged \"" + input.key() + "\"").withStyle(ChatFormatting.GRAY)));
@@ -173,7 +173,7 @@ public class MachineCategory implements IRecipeCategory<TerfRecipe> {
             if (output.kind() == TerfRecipe.OutputKind.FLUID || output.chance() != null) {
                 slot.addRichTooltipCallback((view, tooltip) -> {
                     if (output.kind() == TerfRecipe.OutputKind.FLUID) {
-                        tooltip.add(Component.literal("Amount: " + output.count()).withStyle(ChatFormatting.AQUA));
+                        tooltip.add(Component.literal("Amount: " + output.count() + " mB").withStyle(ChatFormatting.AQUA));
                     }
                     if (output.chance() != null) {
                         tooltip.add(Component.literal("Chance: " + Format.trim(output.chance()) + "%").withStyle(ChatFormatting.GOLD));

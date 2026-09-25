@@ -55,6 +55,10 @@ public final class MachineDefs {
         public String note;
         /** Multiblock view: auto (default) | layers | list | hidden. */
         public String structure;
+        /** Hides every recipe of this machine (its multiblock page stays). */
+        public boolean hideRecipes;
+        /** Recipe ids to hide, without the "machine/" prefix ("*" = anything). */
+        public List<String> hiddenRecipes = List.of();
     }
 
     private final Map<String, MachineDef> defs;

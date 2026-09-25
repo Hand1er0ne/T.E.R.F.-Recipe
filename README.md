@@ -36,6 +36,16 @@ recipe:fabricator/*gold*         # par identifiant (visible avec F3+H sur le ré
 item:terf:command_block_staff    # retire un item custom de la liste JEI
 ```
 
+Masquages par défaut (dans `machines.json`, surchargeables via `config/terf-recipes/machines.json`) :
+`"hideRecipes": true` masque l'onglet de recettes d'une machine en gardant sa structure
+(Fission Fuel Loader), `"hiddenRecipes": ["minecraft:repeating_command_block"]` masque des
+recettes précises (OpenCore).
+
+Autres ajustements d'affichage : la Red Glazed Terracotta (état « courant qui passe » d'un coin
+de câble) est affichée comme High Voltage Conductor Slab ; les pages « Grindstone » de JEI sont
+masquées pour les items rechargeables ; une version chargée des items rechargeables donnés vides
+(Electron Bomb) est ajoutée à la liste d'items JEI uniquement.
+
 ## Commandes (côté client)
 
 - `/terfrecipes` : nombre de recettes / items et source utilisée
@@ -63,10 +73,12 @@ Le datapack n'a pas de fichiers de structure : la table `mb_setup_functions` (da
 chaque machine, et la forme n'existe que sous forme de conditions `if block ^x ^y ^z <bloc>`
 dans les fonctions setup / tick / checks. Le mod suit ces fonctions et reconstruit la structure.
 
-- Première page : la liste des blocs avec leur quantité (U sur un bloc = machines qui l'utilisent).
-- Machines simples : une page par couche, vue de dessus (tu es en bas de la grille, face à la
-  machine ; le cadre rouge = bloc où poser le Core). Infobulles : états du bloc, entrée d'énergie,
-  port de fluide.
+Une seule page par machine :
+- à gauche, la liste des blocs avec leur quantité (U sur un bloc = machines qui l'utilisent) ;
+- à droite (machines simples), la vue de dessus d'une couche : change de couche avec les
+  boutons < > à côté de « Layer n/m » ou la molette sur la grille. Tu es en bas de la grille,
+  face à la machine ; le cadre rouge = bloc où poser le Core. Infobulles : états du bloc,
+  entrée d'énergie, port de fluide.
 - Grosses machines (STFR, Warp Core, OpenCore, Hadron Collider...) : liste seulement.
   Réglable par machine avec `"structure": "layers" | "list" | "hidden"` dans `machines.json`.
 

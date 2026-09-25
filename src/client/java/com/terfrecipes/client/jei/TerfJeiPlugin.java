@@ -7,6 +7,8 @@ import com.terfrecipes.data.Multiblock;
 import com.terfrecipes.data.TerfData;
 import com.terfrecipes.data.TerfRecipe;
 import mezz.jei.api.IModPlugin;
+import mezz.jei.api.constants.RecipeTypes;
+import mezz.jei.api.recipe.vanilla.IJeiGrindstoneRecipe;
 import mezz.jei.api.helpers.IGuiHelper;
 import mezz.jei.api.recipe.types.IRecipeType;
 import mezz.jei.api.registration.IExtraIngredientRegistration;
@@ -45,7 +47,7 @@ public class TerfJeiPlugin implements IModPlugin {
     private static final Map<String, List<TerfRecipe>> SHOWN = new LinkedHashMap<>();
     private static @Nullable IJeiRuntime runtime;
     /** Multiblock pages currently shown. */
-    private static List<MultiblockCategory.Page> shownPages = List.of();
+    private static List<Multiblock> shownPages = List.of();
     private static boolean multiblockCategoryRegistered;
 
     @Override
@@ -85,6 +87,8 @@ public class TerfJeiPlugin implements IModPlugin {
     @Override
     public void registerExtraIngredients(IExtraIngredientRegistration registration) {
         List<ItemStack> extra = new ArrayList<>(ItemResolver.allMaterials());
+        extra.addAll(ItemResolver.chargedVariants()); // e.g. a charged Electron Bomb, give-only
+        extra.addAll(ItemResolver.allFluids()); // filled syringes, searchable by fluid name
         registration.addExtraItemStacks(extra);
     }
 
@@ -159,6 +163,28 @@ public class TerfJeiPlugin implements IModPlugin {
     @Override
     public void onRuntimeAvailable(IJeiRuntime jeiRuntime) {
         runtime = jeiRuntime;
+        hideGrindstoneRepairs(jeiRuntime);
+    }
+
+    /**
+     * JEI builds grindstone "repair" pages for every damageable item, which makes no sense for
+     * TERF's rechargeable tools (their durability bar is their charge).
+     */
+    private static void hideGrindstoneRepairs(IJeiRuntime rt) {
+        try {
+            List<IJeiGrindstoneRecipe> toHide = rt.getRecipeManager().createRecipeLookup(RecipeTypes.GRINDSTONE).get()
+                    .filter(r -> anyRechargeable(r.getTopInputs()) || anyRechargeable(r.getBottomInputs())
+                            || anyRechargeable(r.getOutputs()))
+                    .toList();
+            if (!toHide.isEmpty()) rt.getRecipeManager().hideRecipes(RecipeTypes.GRINDSTONE, toHide);
+        } catch (RuntimeException e) {
+            TERFRecipes.LOGGER.debug("[TERF Recipes] Could not hide grindstone recipes", e);
+        }
+    }
+
+    private static boolean anyRechargeable(List<ItemStack> stacks) {
+        for (ItemStack s : stacks) if (ItemResolver.isRechargeable(s)) return true;
+        return false;
     }
 
     @Override
