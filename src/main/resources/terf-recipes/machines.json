@@ -1,0 +1,214 @@
+{
+  "//": "Presentation hints only: recipes always come from the datapack. Unknown machines use _default. Copy to config/terf-recipes/machines.json to override.",
+  "//structure": "\"structure\": auto (default) | layers | list | hidden  -> how the multiblock is shown in the TERF Multiblocks tab",
+  "_default": {
+    "icon": "terf:multiblock_core",
+    "params": {
+      "t": {
+        "label": "Time",
+        "format": "ticks"
+      }
+    }
+  },
+  "crusher": {
+    "name": "Crusher",
+    "icon": "minecraft:piston",
+    "timeParam": "t",
+    "params": {
+      "t": {
+        "label": "Time",
+        "format": "ticks"
+      }
+    },
+    "note": "Uses 10 power/tick"
+  },
+  "ebf": {
+    "name": "Electric Blast Furnace",
+    "icon": "minecraft:blast_furnace",
+    "timeParam": "t",
+    "params": {
+      "t": {
+        "label": "Time",
+        "format": "ticks"
+      }
+    },
+    "note": "Uses 100 power/tick"
+  },
+  "electric_press": {
+    "name": "Electric Press",
+    "icon": "minecraft:heavy_weighted_pressure_plate",
+    "inputCounts": {
+      "a": 0
+    },
+    "note": "Drop exactly this amount of items on the press"
+  },
+  "electrolyzer": {
+    "name": "Electrolyzer",
+    "icon": "minecraft:observer",
+    "input": "fluid",
+    "outputKeys": [
+      "1",
+      "2"
+    ],
+    "inputCounts": {
+      "a": 0
+    },
+    "timeParam": "t",
+    "params": {
+      "t": {
+        "label": "Time",
+        "format": "ticks"
+      }
+    },
+    "note": "Uses 15 power/tick"
+  },
+  "wet_mill": {
+    "name": "Wet Mill",
+    "icon": "minecraft:grindstone",
+    "fixedTicks": 100,
+    "params": {
+      "a": {
+        "format": "hidden"
+      }
+    },
+    "note": "Uses 6 power/tick"
+  },
+  "hadron_collider": {
+    "name": "Hadron Collider",
+    "icon": "minecraft:end_rod",
+    "inputCounts": {
+      "a": 0,
+      "b": 1
+    },
+    "params": {
+      "l": {
+        "label": "Min. ring length"
+      },
+      "x": {
+        "label": "Shots",
+        "unit": "(1 shot / 3s)"
+      }
+    },
+    "note": "Left: target, right: material",
+    "structure": "list"
+  },
+  "opencore": {
+    "name": "OpenCore",
+    "icon": "minecraft:beacon",
+    "inputCounts": {
+      "a": 0
+    },
+    "params": {
+      "x": {
+        "label": "Power"
+      }
+    },
+    "structure": "list"
+  },
+  "rolling_mill": {
+    "name": "Rolling Mill",
+    "icon": "minecraft:grindstone",
+    "timeParam": "t",
+    "params": {
+      "t": {
+        "label": "Time",
+        "format": "ticks"
+      }
+    },
+    "note": "Uses 6 power/tick"
+  },
+  "extrusion_press": {
+    "name": "Extrusion Press",
+    "icon": "minecraft:sticky_piston",
+    "timeParam": "t",
+    "params": {
+      "t": {
+        "label": "Time",
+        "format": "ticks"
+      }
+    },
+    "note": "Second slot: extrusion mold (not consumed, loses durability)"
+  },
+  "shearing_press": {
+    "name": "Shearing Press",
+    "icon": "minecraft:shears",
+    "timeParam": "t",
+    "params": {
+      "t": {
+        "label": "Time",
+        "format": "ticks"
+      }
+    },
+    "note": "Uses 3 power/tick"
+  },
+  "fabricator": {
+    "name": "Fabricator",
+    "icon": "minecraft:crafter",
+    "layout": "grid"
+  },
+  "assembler": {
+    "name": "Assembler",
+    "icon": "minecraft:sticky_piston",
+    "params": {
+      "t": {
+        "label": "Extension decrease/tick"
+      },
+      "m": {
+        "label": "Min. extension"
+      }
+    },
+    "structure": "list"
+  },
+  "large_fluid_solidifier": {
+    "name": "Large Fluid Solidifier",
+    "icon": "minecraft:cauldron",
+    "input": "fluid",
+    "inputCounts": {
+      "a": 0
+    },
+    "fixedTicks": 200
+  },
+  "fission_fuel_loader": {
+    "name": "Fission Fuel Loader",
+    "icon": "minecraft:dispenser",
+    "modeKeys": 1
+  },
+  "dem": {
+    "name": "DEM",
+    "icon": "minecraft:blue_glazed_terracotta",
+    "params": {
+      "a": {
+        "label": "a"
+      },
+      "b": {
+        "label": "b"
+      },
+      "t": {
+        "label": "t"
+      },
+      "m": {
+        "label": "m"
+      }
+    }
+  },
+  "stfr": {
+    "name": "STFR",
+    "structure": "list"
+  },
+  "warp_core": {
+    "name": "Warp Core",
+    "structure": "list"
+  },
+  "mcfr": {
+    "name": "MCFR",
+    "structure": "list"
+  },
+  "turbine_large": {
+    "name": "Large Turbine",
+    "structure": "list"
+  },
+  "fission_reactor": {
+    "name": "Fission Reactor",
+    "structure": "list"
+  }
+}

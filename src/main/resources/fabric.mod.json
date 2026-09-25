@@ -1,0 +1,47 @@
+{
+	"schemaVersion": 1,
+	"id": "terf-recipes",
+	"version": "${version}",
+	"name": "TERF Recipes",
+	"description": "Shows the machine recipes and custom items of the TERF datapack in JEI, read dynamically from the datapack itself.",
+	"authors": [
+		"Me!"
+	],
+	"contact": {
+		"homepage": "https://fabricmc.net/",
+		"sources": "https://github.com/FabricMC/fabric-example-mod"
+	},
+	"license": "CC0-1.0",
+	"icon": "assets/terf-recipes/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"com.terfrecipes.TERFRecipes"
+		],
+		"client": [
+			"com.terfrecipes.client.TERFRecipesClient"
+		],
+		"jei_mod_plugin": [
+			"com.terfrecipes.client.jei.TerfJeiPlugin"
+		],
+		"fabric-datagen": [
+			"com.terfrecipes.client.TERFRecipesDataGenerator"
+		]
+	},
+	"mixins": [
+		"terf-recipes.mixins.json",
+		{
+			"config": "terf-recipes.client.mixins.json",
+			"environment": "client"
+		}
+	],
+	"depends": {
+		"fabricloader": ">=0.19.5",
+		"minecraft": "~26.1.2",
+		"java": ">=25",
+		"fabric-api": "*"
+	},
+	"suggests": {
+		"jei": "*"
+	}
+}
