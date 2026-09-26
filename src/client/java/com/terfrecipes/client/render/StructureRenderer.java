@@ -7,10 +7,8 @@ import com.terfrecipes.TERFRecipes;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.render.pip.PictureInPictureRenderer;
 import net.minecraft.client.multiplayer.ClientLevel;
-import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.block.MovingBlockRenderState;
-import net.minecraft.client.renderer.feature.FeatureRenderDispatcher;
 import net.minecraft.client.renderer.item.ItemStackRenderState;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.core.BlockPos;
@@ -38,8 +36,7 @@ public class StructureRenderer extends PictureInPictureRenderer<StructureRenderS
 
     private static final int FULL_BRIGHT = 0xF000F0;
 
-    public StructureRenderer(MultiBufferSource.BufferSource bufferSource) {
-        super(bufferSource);
+    public StructureRenderer() {
     }
 
     @Override
@@ -59,19 +56,17 @@ public class StructureRenderer extends PictureInPictureRenderer<StructureRenderS
     }
 
     @Override
-    protected void renderToTexture(StructureRenderState state, PoseStack pose) {
+    protected void renderToTexture(StructureRenderState state, PoseStack pose, SubmitNodeCollector collector) {
         Minecraft mc = Minecraft.getInstance();
         ClientLevel level = mc.level;
         if (level == null) return;
         try {
-            mc.gameRenderer.getLighting().setupFor(Lighting.Entry.ITEMS_3D);
-            FeatureRenderDispatcher dispatcher = mc.gameRenderer.getFeatureRenderDispatcher();
-            SubmitNodeCollector collector = dispatcher.getSubmitNodeStorage();
+            mc.gameRenderer.lighting().setupFor(Lighting.Entry.ITEMS_3D);
 
             // the texture space is y-down like the screen: turn the world upside up, then the camera
-            pose.mulPose(Axis.ZP.rotation((float) Math.PI));
-            pose.mulPose(Axis.XP.rotationDegrees(state.pitch()));
-            pose.mulPose(Axis.YP.rotationDegrees(state.yaw()));
+            pose.rotate(Axis.ZP.rotation((float) Math.PI));
+            pose.rotate(Axis.XP.rotationDegrees(state.pitch()));
+            pose.rotate(Axis.YP.rotationDegrees(state.yaw()));
             pose.translate(-state.centerX(), -state.centerY(), -state.centerZ());
 
             BlockPos lightPos = mc.player != null ? mc.player.blockPosition() : BlockPos.ZERO;
@@ -82,7 +77,7 @@ public class StructureRenderer extends PictureInPictureRenderer<StructureRenderS
                 BlockState st = b.state();
                 if (st != null && st.getBlock() instanceof LiquidBlock && !st.getFluidState().isEmpty()) {
                     // water / lava source: tesselated like in the world
-                    renderFluid(mc, st, pose, biome, level);
+                    renderFluid(mc, st, pose, collector, biome, level);
                 } else if (st != null && hasGeometry(mc, st)) {
                     FullBrightBlock block = new FullBrightBlock();
                     block.blockState = st;
@@ -91,7 +86,7 @@ public class StructureRenderer extends PictureInPictureRenderer<StructureRenderS
                     block.biome = biome;
                     block.cardinalLighting = level.cardinalLighting();
                     block.lightEngine = level.getLightEngine();
-                    collector.submitMovingBlock(pose, block);
+                    collector.submitMovingBlock(pose, block, 0);
                 } else if (!b.item().isEmpty()) {
                     // drawn by a block entity renderer (chest, decorated pot, sign...): its item, full size
                     pose.translate(0.5f, 0.5f, 0.5f);
@@ -100,7 +95,7 @@ public class StructureRenderer extends PictureInPictureRenderer<StructureRenderS
                         // wall sign / banner: flat against the block it hangs on, facing out
                         Direction facing = st.getValue(BlockStateProperties.HORIZONTAL_FACING);
                         pose.translate(-facing.getStepX() * 0.44f, 0f, -facing.getStepZ() * 0.44f);
-                        pose.mulPose(Axis.YP.rotationDegrees(-facing.toYRot()));
+                        pose.rotate(Axis.YP.rotationDegrees(-facing.toYRot()));
                     }
                     ItemStackRenderState item = new ItemStackRenderState();
                     mc.getItemModelResolver().updateForTopItem(item, b.item(), ItemDisplayContext.NONE, level, null, 0);
@@ -117,7 +112,6 @@ public class StructureRenderer extends PictureInPictureRenderer<StructureRenderS
                 core.submit(pose, collector, FULL_BRIGHT, OverlayTexture.NO_OVERLAY, 0);
                 pose.popPose();
             }
-            dispatcher.renderAllFeatures();
         } catch (RuntimeException e) {
             TERFRecipes.LOGGER.debug("[TERF Recipes] 3D structure view failed", e);
         }
@@ -142,8 +136,8 @@ public class StructureRenderer extends PictureInPictureRenderer<StructureRenderS
         });
     }
 
-    private void renderFluid(Minecraft mc, BlockState st, PoseStack pose, net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> biome,
-                             ClientLevel level) {
+    private void renderFluid(Minecraft mc, BlockState st, PoseStack pose, SubmitNodeCollector collector,
+                             net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> biome, ClientLevel level) {
         FullBrightBlock getter = new FullBrightBlock();
         getter.blockState = st;
         getter.blockPos = BlockPos.ZERO;
@@ -151,15 +145,15 @@ public class StructureRenderer extends PictureInPictureRenderer<StructureRenderS
         getter.biome = biome;
         getter.cardinalLighting = level.cardinalLighting();
         getter.lightEngine = level.getLightEngine();
-        Matrix4f matrix = new Matrix4f(pose.last().pose());
-        Matrix3f normal = new Matrix3f(pose.last().normal());
-        new FluidRenderer(mc.getModelManager().getFluidStateModelSet()).tesselate(getter, BlockPos.ZERO,
-                layer -> new Transformed(bufferSource.getBuffer(switch (layer) {
-                    case SOLID -> RenderTypes.solidMovingBlock();
-                    case CUTOUT -> RenderTypes.cutoutMovingBlock();
-                    default -> RenderTypes.translucentMovingBlock();
-                }), matrix, normal),
-                st, st.getFluidState());
+        // water is translucent, lava solid
+        var type = st.getFluidState().is(net.minecraft.tags.FluidTags.WATER)
+                ? RenderTypes.translucentMovingBlock() : RenderTypes.solidMovingBlock();
+        FluidRenderer fluids = new FluidRenderer(mc.getModelManager().getFluidStateModelSet());
+        collector.submitCustomGeometry(pose, type, (entry, out) -> {
+            Matrix4f matrix = new Matrix4f(entry.pose());
+            Matrix3f normal = new Matrix3f(entry.normal());
+            fluids.tesselate(getter, BlockPos.ZERO, layer -> new Transformed(out, matrix, normal), st, st.getFluidState());
+        });
     }
 
     /** Applies the pose to vertices written in block space (the fluid tesselator writes raw positions). */
@@ -198,6 +192,12 @@ public class StructureRenderer extends PictureInPictureRenderer<StructureRenderS
         @Override
         public VertexConsumer setUv2(int u, int v) {
             out.setUv2(u, v);
+            return this;
+        }
+
+        @Override
+        public VertexConsumer setUv3(float u, float v) {
+            out.setUv3(u, v);
             return this;
         }
 

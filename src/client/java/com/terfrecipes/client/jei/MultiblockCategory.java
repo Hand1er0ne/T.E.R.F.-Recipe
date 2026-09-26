@@ -261,7 +261,7 @@ public class MultiblockCategory implements IRecipeCategory<Multiblock> {
                         Component.literal("on the block you are looking at").withStyle(ChatFormatting.GRAY),
                         Component.literal("(where the Multiblock Core goes)").withStyle(ChatFormatting.GRAY)),
                 () -> {
-                    Minecraft.getInstance().setScreen(null);
+                    Minecraft.getInstance().gui.setScreen(null);
                     com.terfrecipes.client.render.Hologram.show(mb);
                 }, width, height);
         builder.addWidget(show);

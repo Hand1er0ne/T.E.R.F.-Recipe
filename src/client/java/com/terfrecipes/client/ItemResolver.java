@@ -51,7 +51,7 @@ public final class ItemResolver {
      * power wire corner (datapipes_lib), the block to place is the High Voltage Conductor Slab.
      */
     private static Item displayItem(Item item) {
-        return item == Items.RED_GLAZED_TERRACOTTA ? Items.GRANITE_SLAB : item;
+        return item == Items.GLAZED_TERRACOTTA.pick(net.minecraft.world.item.DyeColor.RED) ? Items.GRANITE_SLAB : item;
     }
 
     /** Components kept when a full decode fails (e.g. a registry entry missing on this client). */
@@ -565,7 +565,7 @@ public final class ItemResolver {
 
     /** Same substitution as {@link #displayItem}: a powered wire corner is a double High Voltage Conductor Slab. */
     private static net.minecraft.world.level.block.state.BlockState displayState(net.minecraft.world.level.block.state.BlockState state) {
-        if (state.is(net.minecraft.world.level.block.Blocks.RED_GLAZED_TERRACOTTA)) {
+        if (state.is(net.minecraft.world.level.block.Blocks.GLAZED_TERRACOTTA.pick(net.minecraft.world.item.DyeColor.RED))) {
             return net.minecraft.world.level.block.Blocks.GRANITE_SLAB.defaultBlockState()
                     .setValue(net.minecraft.world.level.block.SlabBlock.TYPE, net.minecraft.world.level.block.state.properties.SlabType.DOUBLE);
         }

@@ -57,7 +57,7 @@ final class DatapackVanillaRecipes {
                     overridden.add(id);
                     continue;
                 }
-                Recipe<?> recipe = Recipe.CODEC.parse(ops, json).getOrThrow();
+                Recipe<?> recipe = Recipe.DIRECT_CODEC.parse(ops, json).getOrThrow();
                 // a file under data/minecraft replaces the vanilla recipe of the same id: hide that
                 // one and show ours under another id (JEI tells recipes apart by id)
                 Identifier shownId = id;
