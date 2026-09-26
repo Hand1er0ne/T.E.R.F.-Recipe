@@ -40,7 +40,7 @@ public class TERFRecipesClient implements ClientModInitializer {
 		}
 		// 3D view of the multiblocks in JEI
 		net.fabricmc.fabric.api.client.rendering.v1.PictureInPictureRendererRegistry.register(
-				ctx -> new com.terfrecipes.client.render.StructureRenderer(ctx.bufferSource()));
+				ctx -> new com.terfrecipes.client.render.StructureRenderer());
 		TERFRecipes.LOGGER.info("[TERF Recipes] Client initialized (config folder: {})", TerfDataManager.configDir());
 	}
 

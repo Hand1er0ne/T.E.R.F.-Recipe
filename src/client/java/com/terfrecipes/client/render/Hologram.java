@@ -3,7 +3,6 @@ package com.terfrecipes.client.render;
 import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.QuadInstance;
-import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.terfrecipes.TERFRecipes;
 import com.terfrecipes.client.ItemResolver;
 import com.terfrecipes.data.Multiblock;
@@ -15,7 +14,6 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
-import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.block.dispatch.BlockStateModelPart;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
@@ -87,7 +85,7 @@ public final class Hologram {
         clearKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.terf-recipes.hologram_clear",
                 InputConstants.Type.KEYSYM, InputConstants.KEY_H, category));
         ClientTickEvents.END_CLIENT_TICK.register(Hologram::tick);
-        LevelRenderEvents.AFTER_TRANSLUCENT_FEATURES.register(Hologram::render);
+        LevelRenderEvents.COLLECT_SUBMITS.register(Hologram::render);
     }
 
     // ------------------------------------------------------------------ control
@@ -114,7 +112,7 @@ public final class Hologram {
     public static void clear() {
         shown = null;
         Minecraft mc = Minecraft.getInstance();
-        if (mc.gui != null) mc.gui.setOverlayMessage(Component.empty(), false);
+        if (mc.gui != null) mc.gui.hud.setOverlayMessage(Component.empty(), false);
     }
 
     private static String keyName(KeyMapping key) {
@@ -171,7 +169,7 @@ public final class Hologram {
                     .append(Component.literal(status[0] + " missing").withStyle(ChatFormatting.AQUA))
                     .append(Component.literal(status[1] > 0 ? ", " + status[1] + " wrong" : "").withStyle(ChatFormatting.RED));
         }
-        mc.gui.setOverlayMessage(msg, false);
+        mc.gui.hud.setOverlayMessage(msg, false);
     }
 
     // ------------------------------------------------------------------ comparison
@@ -240,9 +238,7 @@ public final class Hologram {
         try {
             Vec3 cam = ctx.levelState().cameraRenderState.pos;
             PoseStack pose = ctx.poseStack();
-            MultiBufferSource.BufferSource buffers = ctx.bufferSource();
             RenderType type = RenderTypes.translucentMovingBlock();
-            VertexConsumer out = buffers.getBuffer(type);
             long second = System.currentTimeMillis() / 1000;
 
             // chosen state of each visible position, turned with the structure
@@ -254,7 +250,6 @@ public final class Hologram {
             }
 
             RandomSource random = RandomSource.create();
-            List<BlockStateModelPart> parts = new ArrayList<>();
             for (Map.Entry<Multiblock.Pos, BlockState> e : chosen.entrySet()) {
                 Multiblock.Pos p = e.getKey();
                 BlockPos wp = worldPos(p);
@@ -278,18 +273,19 @@ public final class Hologram {
                 quad.setColor(wrong ? WRONG_COLOR : GHOST_COLOR);
                 quad.setLightCoords(FULL_BRIGHT);
                 quad.setOverlayCoords(OverlayTexture.NO_OVERLAY);
-                parts.clear();
+                List<BlockStateModelPart> parts = new ArrayList<>();
                 random.setSeed(42L);
                 mc.getModelManager().getBlockStateModelSet().get(ghost).collectParts(random, parts);
-                for (BlockStateModelPart part : parts) {
-                    for (BakedQuad q : part.getQuads(null)) out.putBakedQuad(pose.last(), q, quad);
-                    for (Direction d : Direction.values()) {
-                        for (BakedQuad q : part.getQuads(d)) out.putBakedQuad(pose.last(), q, quad);
+                ctx.submitNodeCollector().submitCustomGeometry(pose, type, (entry, out) -> {
+                    for (BlockStateModelPart part : parts) {
+                        for (BakedQuad q : part.getQuads(null)) out.putBakedQuad(entry, q, quad);
+                        for (Direction d : Direction.values()) {
+                            for (BakedQuad q : part.getQuads(d)) out.putBakedQuad(entry, q, quad);
+                        }
                     }
-                }
+                });
                 pose.popPose();
             }
-            buffers.endBatch(type);
         } catch (RuntimeException e) {
             TERFRecipes.LOGGER.debug("[TERF Recipes] Hologram rendering failed", e);
         }

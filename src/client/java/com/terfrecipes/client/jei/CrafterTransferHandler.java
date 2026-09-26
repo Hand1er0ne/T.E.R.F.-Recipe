@@ -5,11 +5,9 @@ import com.terfrecipes.data.TerfRecipe;
 import mezz.jei.api.gui.ingredient.IRecipeSlotView;
 import mezz.jei.api.gui.ingredient.IRecipeSlotsView;
 import mezz.jei.api.recipe.RecipeIngredientRole;
-import mezz.jei.api.recipe.transfer.IRecipeTransferContext;
 import mezz.jei.api.recipe.transfer.IRecipeTransferError;
 import mezz.jei.api.recipe.transfer.IRecipeTransferHandler;
 import mezz.jei.api.recipe.transfer.IRecipeTransferHandlerHelper;
-import mezz.jei.api.recipe.transfer.RecipeTransferResult;
 import mezz.jei.api.recipe.types.IRecipeType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.MultiPlayerGameMode;
@@ -64,18 +62,9 @@ final class CrafterTransferHandler implements IRecipeTransferHandler<CrafterMenu
     }
 
     @Override
-    @SuppressWarnings("removal")
     public @Nullable IRecipeTransferError transferRecipe(CrafterMenu menu, TerfRecipe recipe, IRecipeSlotsView slots, Player player,
                                                          boolean maxTransfer, boolean doTransfer) {
         return transfer(menu, recipe, slots, player, maxTransfer, doTransfer);
-    }
-
-    @Override
-    public @Nullable IRecipeTransferError transferRecipe(IRecipeTransferContext<TerfRecipe, CrafterMenu> context, boolean doTransfer) {
-        IRecipeTransferError error = transfer(context.getContainer(), context.getRecipe(), context.getRecipeSlots(),
-                context.getPlayer(), context.isMaxTransfer(), doTransfer);
-        if (doTransfer) context.completeRecipeTransfer(error == null ? RecipeTransferResult.SUCCESS : RecipeTransferResult.REJECTED);
-        return error;
     }
 
     /** Item + TERF id: two custom items on the same vanilla item are different ingredients. */
