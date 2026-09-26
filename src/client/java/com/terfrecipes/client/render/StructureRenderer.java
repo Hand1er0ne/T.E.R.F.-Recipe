@@ -64,9 +64,9 @@ public class StructureRenderer extends PictureInPictureRenderer<StructureRenderS
             mc.gameRenderer.lighting().setupFor(Lighting.Entry.ITEMS_3D);
 
             // the texture space is y-down like the screen: turn the world upside up, then the camera
-            pose.mulPose(Axis.ZP.rotation((float) Math.PI));
-            pose.mulPose(Axis.XP.rotationDegrees(state.pitch()));
-            pose.mulPose(Axis.YP.rotationDegrees(state.yaw()));
+            pose.rotate(Axis.ZP.rotation((float) Math.PI));
+            pose.rotate(Axis.XP.rotationDegrees(state.pitch()));
+            pose.rotate(Axis.YP.rotationDegrees(state.yaw()));
             pose.translate(-state.centerX(), -state.centerY(), -state.centerZ());
 
             BlockPos lightPos = mc.player != null ? mc.player.blockPosition() : BlockPos.ZERO;
@@ -95,7 +95,7 @@ public class StructureRenderer extends PictureInPictureRenderer<StructureRenderS
                         // wall sign / banner: flat against the block it hangs on, facing out
                         Direction facing = st.getValue(BlockStateProperties.HORIZONTAL_FACING);
                         pose.translate(-facing.getStepX() * 0.44f, 0f, -facing.getStepZ() * 0.44f);
-                        pose.mulPose(Axis.YP.rotationDegrees(-facing.toYRot()));
+                        pose.rotate(Axis.YP.rotationDegrees(-facing.toYRot()));
                     }
                     ItemStackRenderState item = new ItemStackRenderState();
                     mc.getItemModelResolver().updateForTopItem(item, b.item(), ItemDisplayContext.NONE, level, null, 0);
@@ -192,6 +192,12 @@ public class StructureRenderer extends PictureInPictureRenderer<StructureRenderS
         @Override
         public VertexConsumer setUv2(int u, int v) {
             out.setUv2(u, v);
+            return this;
+        }
+
+        @Override
+        public VertexConsumer setUv3(float u, float v) {
+            out.setUv3(u, v);
             return this;
         }
 

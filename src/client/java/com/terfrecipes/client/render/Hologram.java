@@ -77,13 +77,13 @@ public final class Hologram {
     public static void init() {
         KeyMapping.Category category = KeyMapping.Category.register(Identifier.fromNamespaceAndPath(TERFRecipes.MOD_ID, "hologram"));
         rotateKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.terf-recipes.hologram_rotate",
-                InputConstants.Type.KEYSYM, InputConstants.KEY_R, category));
+                InputConstants.Type.KEYBOARD, InputConstants.KEY_R, category));
         layerKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.terf-recipes.hologram_layer",
-                InputConstants.Type.KEYSYM, InputConstants.KEY_J, category));
+                InputConstants.Type.KEYBOARD, InputConstants.KEY_J, category));
         moveKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.terf-recipes.hologram_move",
-                InputConstants.Type.KEYSYM, InputConstants.KEY_G, category));
+                InputConstants.Type.KEYBOARD, InputConstants.KEY_G, category));
         clearKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.terf-recipes.hologram_clear",
-                InputConstants.Type.KEYSYM, InputConstants.KEY_H, category));
+                InputConstants.Type.KEYBOARD, InputConstants.KEY_H, category));
         ClientTickEvents.END_CLIENT_TICK.register(Hologram::tick);
         LevelRenderEvents.COLLECT_SUBMITS.register(Hologram::render);
     }
