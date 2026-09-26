@@ -20,6 +20,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Stream;
 
@@ -40,6 +41,16 @@ public final class TerfDataManager {
 
     private static volatile TerfData data = TerfData.empty();
     private static volatile MachineDefs defs;
+    /** Crafting-table / furnace / stonecutter recipe files of the datapack (path -> json). */
+    private static volatile Map<String, String> vanillaRecipeFiles = Map.of();
+
+    /**
+     * The datapack's own crafting / smelting / stonecutting recipes, to show in JEI's vanilla tabs.
+     * Empty in singleplayer: JEI already reads them from the world.
+     */
+    public static Map<String, String> vanillaRecipeFiles() {
+        return vanillaRecipeFiles;
+    }
 
     private TerfDataManager() {
     }
@@ -107,6 +118,7 @@ public final class TerfDataManager {
                     TERFRecipes.LOGGER.warn("[TERF Recipes]   {}", err);
                 }
                 data = built;
+                vanillaRecipeFiles = loadVanillaRecipes(source, bundled);
                 ItemResolver.clearCache();
                 return built;
             } catch (RuntimeException e) {
@@ -117,6 +129,27 @@ public final class TerfDataManager {
         data = TerfData.empty();
         ItemResolver.clearCache();
         return data;
+    }
+
+    private static Map<String, String> loadVanillaRecipes(DatapackSource source, DatapackSource bundled) {
+        if (source instanceof ServerResourcesSource) return Map.of();
+        try {
+            DatapackSource from = source;
+            List<String> paths = source.listRecipes();
+            if (paths.isEmpty() && !(source instanceof DatapackSource.Bundled)) {
+                from = bundled;
+                paths = bundled.listRecipes();
+            }
+            Map<String, String> out = new java.util.LinkedHashMap<>();
+            for (String p : paths) {
+                String text = from.readData(p);
+                if (text != null) out.put(p, text);
+            }
+            return java.util.Collections.unmodifiableMap(out);
+        } catch (RuntimeException e) {
+            TERFRecipes.LOGGER.warn("[TERF Recipes] Could not list the datapack's crafting recipes", e);
+            return Map.of();
+        }
     }
 
     // ------------------------------------------------------------------ sources

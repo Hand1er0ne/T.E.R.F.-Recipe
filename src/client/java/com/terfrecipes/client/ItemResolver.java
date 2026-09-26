@@ -141,7 +141,11 @@ public final class ItemResolver {
                         if (block.isPresent() && block.get().asItem() != Items.AIR) item = block.get().asItem();
                     }
                 }
-                yield item != null ? new ItemStack(displayItem(item)) : unknown(output.key());
+                if (item != null) yield new ItemStack(displayItem(item));
+            // blocks without an item (lava, water...): same substitute as in the structures
+            List<ItemStack> asBlock = blockStacks(new Multiblock.BlockSpec(output.key(), output.key(), "",
+                    List.of(output.key()), Multiblock.Role.NORMAL));
+            yield asBlock.isEmpty() ? unknown(output.key()) : asBlock.get(0).copy();
             }
             case FLUID -> fluid(output.key());
             case SPECIAL -> special(output);
@@ -414,7 +418,7 @@ public final class ItemResolver {
         }
     }
 
-    private static HolderLookup.Provider registries() {
+    public static HolderLookup.Provider registries() {
         Minecraft mc = Minecraft.getInstance();
         if (mc.level != null) return mc.level.registryAccess();
         if (mc.getConnection() != null) return mc.getConnection().registryAccess();

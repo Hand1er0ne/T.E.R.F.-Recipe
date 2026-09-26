@@ -58,7 +58,7 @@ public final class Hologram {
     private static final int WRONG_COLOR = 0xCCFF3030;   // another block is there: red
     private static final int FULL_BRIGHT = 0xF000F0;
     /** Local properties whose value depends on the structure's orientation (checked after rotation). */
-    private static final Set<String> ORIENTED = Set.of("facing", "axis", "rotation", "shape", "hinge");
+    private static final Set<String> ORIENTED = Set.of("facing", "axis", "rotation", "shape", "hinge", "face");
 
     private static KeyMapping rotateKey;
     private static KeyMapping layerKey;

@@ -362,7 +362,9 @@ public final class StructureExtractor {
         if (def.structureAdd != null) {
             for (MachineDefs.BlockPatch add : def.structureAdd) {
                 if (add == null || add.pos == null || add.pos.length != 3 || add.block == null) continue;
-                blocks.put(new Multiblock.Pos(add.pos[0], add.pos[1], add.pos[2]), spec(add.block, Multiblock.Role.NORMAL));
+                Multiblock.Role role = "power".equalsIgnoreCase(add.role) ? Multiblock.Role.POWER
+                        : "fluid".equalsIgnoreCase(add.role) ? Multiblock.Role.FLUID : Multiblock.Role.NORMAL;
+                blocks.put(new Multiblock.Pos(add.pos[0], add.pos[1], add.pos[2]), spec(add.block, role));
             }
         }
     }

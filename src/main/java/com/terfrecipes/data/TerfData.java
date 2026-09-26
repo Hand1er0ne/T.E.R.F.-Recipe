@@ -169,7 +169,15 @@ public final class TerfData {
         OutputParser outputs = new OutputParser(functionReader == null ? id -> null : functionReader);
         RecipeExtractor extractor = new RecipeExtractor(defs, outputs, errors);
         Map<String, List<TerfRecipe>> recipes = extractor.extract(constants.get("recipes"));
-        recipes = promoteInlineItems(recipes, materials);
+        // machines that transform the block placed on them (Arc Furnace, Purifier)
+        Map<String, List<TerfRecipe>> merged = new LinkedHashMap<>(recipes);
+        BlockConversions.extract(defs, functionReader).forEach((machine, list) ->
+                merged.merge(machine, list, (a, b) -> {
+                    List<TerfRecipe> all = new ArrayList<>(a);
+                    all.addAll(b);
+                    return all;
+                }));
+        recipes = promoteInlineItems(merged, materials);
         int[] hiddenByDefs = {0};
         recipes = hideFromDefs(recipes, defs, hiddenByDefs);
         List<Multiblock> structures;

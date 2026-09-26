@@ -42,7 +42,17 @@
     "inputCounts": {
       "a": 0
     },
-    "note": "Drop exactly this amount of items on the press"
+    "note": "Drop exactly this amount of items on the press",
+    "structureAdd": [
+      {
+        "pos": [
+          0,
+          2,
+          0
+        ],
+        "block": "piston[facing=down]"
+      }
+    ]
   },
   "electrolyzer": {
     "name": "Electrolyzer",
@@ -202,7 +212,7 @@
   },
   "stfr": {
     "name": "STFR",
-    "structure": "list"
+    "structure": "hidden"
   },
   "warp_core": {
     "name": "Warp Core",
@@ -443,6 +453,280 @@
   "multi_piston": {
     "structureRemoveBlocks": [
       "slime_block"
+    ],
+    "structureAdd": [
+      {
+        "pos": [
+          0,
+          0,
+          -1
+        ],
+        "block": "waxed_lightning_rod[facing=north]"
+      },
+      {
+        "pos": [
+          0,
+          0,
+          1
+        ],
+        "block": "waxed_lightning_rod[facing=south]"
+      },
+      {
+        "pos": [
+          0,
+          0,
+          2
+        ],
+        "block": "waxed_lightning_rod[facing=south]"
+      },
+      {
+        "pos": [
+          0,
+          0,
+          3
+        ],
+        "block": "waxed_lightning_rod[facing=south]"
+      }
     ]
+  },
+  "arc_furnace": {
+    "name": "Arc Furnace",
+    "conversionFunctions": [
+      "tick"
+    ],
+    "fixedTicks": 200,
+    "note": "Put the block on top of the furnace. Uses 16 power/tick"
+  },
+  "purifier": {
+    "name": "Purifier",
+    "conversionFunctions": [
+      "operation"
+    ],
+    "fixedTicks": 200,
+    "note": "Put the block above the water of the purifier",
+    "structureAdd": [
+      {
+        "pos": [
+          0,
+          0,
+          2
+        ],
+        "block": "iron_trapdoor[open=true,facing=south]"
+      },
+      {
+        "pos": [
+          1,
+          0,
+          2
+        ],
+        "block": "iron_trapdoor[open=true,facing=south]"
+      },
+      {
+        "pos": [
+          2,
+          0,
+          1
+        ],
+        "block": "iron_trapdoor[open=true,facing=east]"
+      }
+    ]
+  },
+  "battery_array": {
+    "name": "Battery Array",
+    "structureIgnore": [
+      "count_cables_on",
+      "count_cables_off"
+    ],
+    "structureAdd": [
+      {
+        "pos": [
+          0,
+          0,
+          1
+        ],
+        "block": "acacia_wall_sign[facing=south]"
+      },
+      {
+        "pos": [
+          0,
+          -2,
+          -1
+        ],
+        "block": "granite_slab[type=double]",
+        "role": "power"
+      },
+      {
+        "pos": [
+          0,
+          -1,
+          -1
+        ],
+        "block": "grindstone[face=floor,facing=south]"
+      },
+      {
+        "pos": [
+          0,
+          0,
+          -1
+        ],
+        "block": "grindstone[face=floor,facing=south]"
+      },
+      {
+        "pos": [
+          1,
+          -1,
+          -1
+        ],
+        "block": "orange_glazed_terracotta[facing=east]"
+      },
+      {
+        "pos": [
+          2,
+          -1,
+          -1
+        ],
+        "block": "orange_glazed_terracotta[facing=east]"
+      },
+      {
+        "pos": [
+          1,
+          0,
+          -1
+        ],
+        "block": "orange_glazed_terracotta[facing=east]"
+      },
+      {
+        "pos": [
+          2,
+          0,
+          -1
+        ],
+        "block": "orange_glazed_terracotta[facing=east]"
+      },
+      {
+        "pos": [
+          0,
+          -2,
+          -2
+        ],
+        "block": "granite_slab[type=double]",
+        "role": "power"
+      },
+      {
+        "pos": [
+          0,
+          -1,
+          -2
+        ],
+        "block": "grindstone[face=floor,facing=south]"
+      },
+      {
+        "pos": [
+          0,
+          0,
+          -2
+        ],
+        "block": "grindstone[face=floor,facing=south]"
+      },
+      {
+        "pos": [
+          1,
+          -1,
+          -2
+        ],
+        "block": "orange_glazed_terracotta[facing=east]"
+      },
+      {
+        "pos": [
+          2,
+          -1,
+          -2
+        ],
+        "block": "orange_glazed_terracotta[facing=east]"
+      },
+      {
+        "pos": [
+          1,
+          0,
+          -2
+        ],
+        "block": "orange_glazed_terracotta[facing=east]"
+      },
+      {
+        "pos": [
+          2,
+          0,
+          -2
+        ],
+        "block": "orange_glazed_terracotta[facing=east]"
+      },
+      {
+        "pos": [
+          0,
+          -2,
+          -3
+        ],
+        "block": "granite_slab[type=double]",
+        "role": "power"
+      },
+      {
+        "pos": [
+          0,
+          -1,
+          -3
+        ],
+        "block": "grindstone[face=floor,facing=south]"
+      },
+      {
+        "pos": [
+          0,
+          0,
+          -3
+        ],
+        "block": "grindstone[face=floor,facing=south]"
+      },
+      {
+        "pos": [
+          1,
+          -1,
+          -3
+        ],
+        "block": "orange_glazed_terracotta[facing=east]"
+      },
+      {
+        "pos": [
+          2,
+          -1,
+          -3
+        ],
+        "block": "orange_glazed_terracotta[facing=east]"
+      },
+      {
+        "pos": [
+          1,
+          0,
+          -3
+        ],
+        "block": "orange_glazed_terracotta[facing=east]"
+      },
+      {
+        "pos": [
+          2,
+          0,
+          -3
+        ],
+        "block": "orange_glazed_terracotta[facing=east]"
+      }
+    ],
+    "structureNotes": [
+      "Example: 3 columns of 2 grindstones on the High Voltage line, 2 batteries against each grindstone",
+      "Add as many grindstones / batteries as you want: each battery adds capacity"
+    ],
+    "blockTips": {
+      "granite_slab": "High Voltage line: starts under the cauldron, grindstones go on top of it",
+      "grindstone": "Stacked on the High Voltage line, batteries are placed against it",
+      "orange_glazed_terracotta": "Battery: in a row against a grindstone, connection legs pointing away from it (stand in front of the grindstone and step back to place them)",
+      "acacia_wall_sign": "Screen on the anvil"
+    }
   }
 }

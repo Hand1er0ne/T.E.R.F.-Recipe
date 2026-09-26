@@ -65,6 +65,8 @@ public final class MachineDefs {
         public List<BlockPatch> structureAdd = List.of();
         /** Multiblock view: positions [x, y, z] to remove. */
         public List<int[]> structureRemove = List.of();
+        /** Functions of the machine holding "if block X run setblock Y" conversions (Arc Furnace...). */
+        public List<String> conversionFunctions = List.of();
         /** Multiblock view: block ids to remove everywhere ("slime_block"). */
         public List<String> structureRemoveBlocks = List.of();
         /** Multiblock view: functions of the machine not to follow (e.g. dynamic flood fills). */
@@ -75,16 +77,25 @@ public final class MachineDefs {
         public Map<String, String> blockTips = new LinkedHashMap<>();
     }
 
-    /** {"pos": [x, y, z], "block": "smooth_stone"} (coordinates relative to the core: left, up, front). */
+    /** {"pos": [x, y, z], "block": "smooth_stone", "role": "power"} (coordinates relative to the core: left, up, front). */
     public static final class BlockPatch {
         public int[] pos;
         public String block;
+        /** Optional: "power" or "fluid" (shown like the datapack's power / fluid ports). */
+        public String role;
     }
 
     private final Map<String, MachineDef> defs;
 
     private MachineDefs(Map<String, MachineDef> defs) {
         this.defs = defs;
+    }
+
+    /** Machines described in machines.json (without "_default"). */
+    public java.util.Set<String> machines() {
+        java.util.Set<String> out = new java.util.LinkedHashSet<>(defs.keySet());
+        out.remove(DEFAULT_KEY);
+        return out;
     }
 
     public MachineDef get(String machine) {

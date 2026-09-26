@@ -43,6 +43,26 @@ dependencies {
 	localRuntime "mezz.jei:jei-${project.minecraft_version}-fabric:${project.jei_version}"
 }
 
+// Index of the datapack's recipe files, bundled with them (see DatapackSource.Bundled)
+def terfRecipeIndex = tasks.register("terfRecipeIndex") {
+	def dataDir = file("TERF_datapack/data")
+	def indexFile = layout.buildDirectory.file("generated/terf/recipes.index")
+	inputs.files(fileTree(dataDir) { include "*/recipe/**/*.json" })
+	outputs.file(indexFile)
+	doLast {
+		def out = indexFile.get().asFile
+		out.parentFile.mkdirs()
+		def lines = []
+		if (dataDir.isDirectory()) {
+			dataDir.eachFileRecurse { f ->
+				def rel = dataDir.toPath().relativize(f.toPath()).toString().replace('\\', '/')
+				if (f.isFile() && rel ==~ /[^\/]+\/recipe\/.+\.json/) lines << "data/" + rel
+			}
+		}
+		out.text = lines.sort().join("\n")
+	}
+}
+
 processResources {
 	def version = project.version
 	inputs.property "version", version
@@ -63,6 +83,15 @@ processResources {
 	// tags de blocs utilisés par les structures des machines (ex. #terf:redstoneactive)
 	from("TERF_datapack/data/terf/tags/block") {
 		into "terf-recipes/datapack/data/terf/tags/block"
+	}
+	// recettes de table de craft / four / tailleur du datapack (affichées dans JEI sur les serveurs)
+	from("TERF_datapack/data") {
+		include "*/recipe/**/*.json"
+		into "terf-recipes/datapack/data"
+	}
+	// liste de ces recettes (un jar ne peut pas être listé)
+	from(terfRecipeIndex) {
+		into "terf-recipes/datapack"
 	}
 }
 

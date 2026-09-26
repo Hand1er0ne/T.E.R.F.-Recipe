@@ -127,6 +127,9 @@ public class TerfJeiPlugin implements IModPlugin {
             registration.addRecipes(MultiblockCategory.TYPE, new ArrayList<>(shownPages));
         }
 
+        // the datapack's crafting-table / furnace / stonecutter recipes (not visible to JEI on servers)
+        DatapackVanillaRecipes.register(registration, TerfDataManager.vanillaRecipeFiles());
+
         // info page for custom items that no machine recipe produces (filled capsules, loot...)
         TerfData data = TerfDataManager.data();
         for (String id : data.materials().keySet()) {
@@ -190,17 +193,18 @@ public class TerfJeiPlugin implements IModPlugin {
     public void onRuntimeAvailable(IJeiRuntime jeiRuntime) {
         runtime = jeiRuntime;
         hideGrindstoneRepairs(jeiRuntime);
+        DatapackVanillaRecipes.hideOverridden(jeiRuntime);
     }
 
     /**
      * JEI builds grindstone "repair" pages for every damageable item, which makes no sense for
-     * TERF's rechargeable tools (their durability bar is their charge).
+     * TERF's items: rechargeable tools (their durability bar is their charge), syringes (their bar
+     * is the fluid level) and any other custom item (repairing would lose its TERF data).
      */
     private static void hideGrindstoneRepairs(IJeiRuntime rt) {
         try {
             List<IJeiGrindstoneRecipe> toHide = rt.getRecipeManager().createRecipeLookup(RecipeTypes.GRINDSTONE).get()
-                    .filter(r -> anyRechargeable(r.getTopInputs()) || anyRechargeable(r.getBottomInputs())
-                            || anyRechargeable(r.getOutputs()))
+                    .filter(r -> anyTerf(r.getTopInputs()) || anyTerf(r.getBottomInputs()) || anyTerf(r.getOutputs()))
                     .toList();
             if (!toHide.isEmpty()) rt.getRecipeManager().hideRecipes(RecipeTypes.GRINDSTONE, toHide);
         } catch (RuntimeException e) {
@@ -208,8 +212,8 @@ public class TerfJeiPlugin implements IModPlugin {
         }
     }
 
-    private static boolean anyRechargeable(List<ItemStack> stacks) {
-        for (ItemStack s : stacks) if (ItemResolver.isRechargeable(s)) return true;
+    private static boolean anyTerf(List<ItemStack> stacks) {
+        for (ItemStack s : stacks) if (ItemResolver.isRechargeable(s) || ItemResolver.subtypeOf(s) != null) return true;
         return false;
     }
 

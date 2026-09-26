@@ -25,6 +25,19 @@ public interface DatapackSource {
         return readData(functionPath(functionId));
     }
 
+    /**
+     * Paths ({@code data/ns/recipe/...json}) of the datapack's crafting / smelting / stonecutting
+     * recipes. Empty when the source cannot list its files.
+     */
+    default java.util.List<String> listRecipes() {
+        return java.util.List.of();
+    }
+
+    /** Whether a path is a recipe file of any namespace. */
+    static boolean isRecipePath(String path) {
+        return path.startsWith("data/") && path.endsWith(".json") && path.matches("data/[^/]+/recipe/.+");
+    }
+
     default boolean hasStartup() {
         return readFunction(STARTUP) != null;
     }
@@ -43,6 +56,23 @@ public interface DatapackSource {
         @Override
         public String describe() {
             return label + " (" + root + ")";
+        }
+
+        @Override
+        public java.util.List<String> listRecipes() {
+            java.util.List<String> out = new java.util.ArrayList<>();
+            Path data = root.resolve("data");
+            if (!Files.isDirectory(data)) return out;
+            try (java.util.stream.Stream<Path> files = Files.walk(data)) {
+                files.filter(Files::isRegularFile).forEach(f -> {
+                    String rel = root.relativize(f).toString().replace('\\', '/');
+                    if (isRecipePath(rel)) out.add(rel);
+                });
+            } catch (IOException e) {
+                // keep what was found
+            }
+            java.util.Collections.sort(out);
+            return out;
         }
 
         @Override
@@ -92,6 +122,15 @@ public interface DatapackSource {
         private java.util.Map<String, String> dataFiles;
 
         @Override
+        public synchronized java.util.List<String> listRecipes() {
+            readData("data/");
+            java.util.List<String> out = new java.util.ArrayList<>();
+            for (String k : dataFiles.keySet()) if (isRecipePath(k)) out.add(k);
+            java.util.Collections.sort(out);
+            return out;
+        }
+
+        @Override
         public synchronized String readData(String path) {
             if (dataFiles == null) {
                 dataFiles = new java.util.HashMap<>();
@@ -136,6 +175,22 @@ public interface DatapackSource {
     /** The copy of the datapack's functions bundled in the mod jar at build time. */
     record Bundled(ClassLoader loader) implements DatapackSource {
         static final String ROOT = "terf-recipes/datapack/";
+        /** Written at build time: one recipe path per line (a jar cannot be listed). */
+        static final String RECIPE_INDEX = ROOT + "recipes.index";
+
+        @Override
+        public java.util.List<String> listRecipes() {
+            try (InputStream in = loader.getResourceAsStream(RECIPE_INDEX)) {
+                if (in == null) return java.util.List.of();
+                java.util.List<String> out = new java.util.ArrayList<>();
+                for (String line : new String(in.readAllBytes(), StandardCharsets.UTF_8).split("\\R")) {
+                    if (isRecipePath(line.strip())) out.add(line.strip());
+                }
+                return out;
+            } catch (IOException e) {
+                return java.util.List.of();
+            }
+        }
 
         @Override
         public String describe() {
