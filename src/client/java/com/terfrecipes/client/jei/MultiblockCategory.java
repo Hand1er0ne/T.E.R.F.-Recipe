@@ -370,15 +370,13 @@ public class MultiblockCategory implements IRecipeCategory<Multiblock> {
         private @Nullable ScreenRectangle coreBox;
         private float @Nullable [] frontTip;
 
-        private void draw3d(GuiGraphicsExtractor gui, net.minecraft.client.gui.Font font, double mouseX, double mouseY) {
-            int vx0 = gridX;
-            int vy0 = HEADER;
-            int vx1 = width;
-            int vy1 = HEADER + rows * SLOT;
-            gui.fill(vx0, vy0, vx1, vy1, VIEW_BG);
+        private @Nullable List<StructureRenderState.Placed> cachedBlocks;
+        private int cachedLayer = -1;
+        private long cachedSecond = -1;
 
+        /** Blocks to draw for the current layer (rebuilt when the layer changes or tags cycle, once a second). */
+        private List<StructureRenderState.Placed> visibleBlocks(long second) {
             List<StructureRenderState.Placed> blocks = new ArrayList<>();
-            long second = System.currentTimeMillis() / 1000;
             // chosen state of every visible block (tags cycle every second)
             Map<Multiblock.Pos, net.minecraft.world.level.block.state.BlockState> chosen = new java.util.HashMap<>();
             Map<Multiblock.Pos, ItemStack> chosenItem = new java.util.HashMap<>();
@@ -398,8 +396,36 @@ public class MultiblockCategory implements IRecipeCategory<Multiblock> {
                     state = ItemResolver.connected(state, d -> chosen.get(new Multiblock.Pos(
                             p.x() + d.getStepX(), p.y() + d.getStepY(), p.z() + d.getStepZ())));
                 }
+                if (state != null && hidden(p, chosen)) continue; // enclosed: never seen, not worth drawing
                 blocks.add(new StructureRenderState.Placed(p.x(), p.y(), p.z(), state, e.getValue()));
             }
+            return blocks;
+        }
+
+        /** Surrounded on all 6 sides by full opaque blocks (big machines are mostly made of these). */
+        private static boolean hidden(Multiblock.Pos p, Map<Multiblock.Pos, net.minecraft.world.level.block.state.BlockState> chosen) {
+            for (net.minecraft.core.Direction d : net.minecraft.core.Direction.values()) {
+                var n = chosen.get(new Multiblock.Pos(p.x() + d.getStepX(), p.y() + d.getStepY(), p.z() + d.getStepZ()));
+                if (n == null || !n.isSolidRender()) return false;
+            }
+            return true;
+        }
+
+        private void draw3d(GuiGraphicsExtractor gui, net.minecraft.client.gui.Font font, double mouseX, double mouseY) {
+            int vx0 = gridX;
+            int vy0 = HEADER;
+            int vx1 = width;
+            int vy1 = HEADER + rows * SLOT;
+            gui.fill(vx0, vy0, vx1, vy1, VIEW_BG);
+
+            long second = System.currentTimeMillis() / 1000;
+            if (cachedBlocks == null || cachedLayer != layer || cachedSecond != second) {
+                cachedBlocks = visibleBlocks(second);
+                cachedLayer = layer;
+                cachedSecond = second;
+            }
+            List<StructureRenderState.Placed> blocks = cachedBlocks;
+
 
             float sx = mb.maxX() - mb.minX() + 1;
             float sy = mb.maxY() - mb.minY() + 1;
