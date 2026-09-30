@@ -212,7 +212,10 @@
   },
   "stfr": {
     "name": "STFR",
-    "structure": "hidden"
+    "structureFunctions": [
+      "structure_checks"
+    ],
+    "structureRotations": true
   },
   "warp_core": {
     "name": "Warp Core",
@@ -220,7 +223,64 @@
   },
   "mcfr": {
     "name": "MCFR",
-    "structure": "list"
+    "structureFunctions": [
+      "checks/start"
+    ],
+    "structureRemove": [
+      [
+        0,
+        1,
+        -1
+      ],
+      [
+        1,
+        1,
+        -1
+      ],
+      [
+        -1,
+        1,
+        0
+      ],
+      [
+        2,
+        1,
+        0
+      ],
+      [
+        -1,
+        1,
+        1
+      ],
+      [
+        2,
+        1,
+        1
+      ],
+      [
+        0,
+        1,
+        2
+      ],
+      [
+        1,
+        1,
+        2
+      ]
+    ],
+    "structureAdd": [
+      {
+        "pos": [
+          0,
+          -1,
+          0
+        ],
+        "block": "obsidian"
+      }
+    ],
+    "structureNotes": [
+      "Example with 2 segments: stack as many 2x2 segments as you want, vents at the bottom and on top"
+    ]
   },
   "turbine_large": {
     "name": "Large Turbine",

@@ -26,6 +26,11 @@ import java.util.zip.ZipOutputStream;
 /**
  * Keeps a copy of the datapack from its GitHub repository in {@code config/terf-recipes/github/}.
  * <p>
+ * Nothing is downloaded without the player's consent: the first {@code /terfrecipes update} only
+ * explains what would be downloaded, and the download starts when the player confirms it
+ * ({@code allowDownloads} in github.json). The optional startup check only asks GitHub for the
+ * latest commit and tells the player in the chat; it never downloads by itself.
+ * <p>
  * The latest commit of the branch is compared with the cached one; when it changed, the branch is
  * downloaded as a zip and only its {@code data/} files are kept. That copy replaces the one bundled
  * in the jar, but the datapack of the world / server (and files put in the config folder) still win.
@@ -33,7 +38,7 @@ import java.util.zip.ZipOutputStream;
  */
 public final class GithubUpdater {
 
-    public enum Status { UP_TO_DATE, UPDATED, DISABLED, FAILED }
+    public enum Status { UP_TO_DATE, UPDATE_AVAILABLE, UPDATED, NOT_ALLOWED, DISABLED, FAILED }
 
     public record Result(Status status, String message) {
     }
@@ -41,11 +46,14 @@ public final class GithubUpdater {
     /** github.json */
     public static final class Settings {
         public boolean enabled = true;
+        /** Set when the player agreed to download the datapack (/terfrecipes update confirm). */
+        public boolean allowDownloads = false;
         public String repo = "jona23EE/TERF_datapack";
         public String branch = "main";
         /** Sub folder of the repository holding the datapack ("" = root). */
         public String path = "";
-        public boolean checkOnStartup = true;
+        /** Ask GitHub for the latest commit when the game starts and say so in the chat (never downloads). */
+        public boolean notifyOnStartup = false;
     }
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
@@ -82,6 +90,22 @@ public final class GithubUpdater {
         return new Settings();
     }
 
+    public static void save(Settings settings) {
+        Path file = TerfDataManager.configDir().resolve("github.json");
+        try {
+            Files.createDirectories(file.getParent());
+            Files.writeString(file, GSON.toJson(settings), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            TERFRecipes.LOGGER.warn("[TERF Recipes] Could not write {}: {}", file, e.toString());
+        }
+    }
+
+    /** Page of the repository, shown to the player before any download. */
+    public static String repoUrl() {
+        Settings s = settings();
+        return "https://github.com/" + s.repo + (s.branch == null || s.branch.isBlank() ? "" : " (branch " + s.branch + ")");
+    }
+
     /** Commit of the cached copy, or null. */
     public static @Nullable String cachedCommit() {
         try {
@@ -102,18 +126,27 @@ public final class GithubUpdater {
         return DatapackSource.Zip.open(zipFile(), "GitHub " + s.repo + "@" + shortSha);
     }
 
-    /** Checks GitHub in the background; concurrent calls share the same check. */
-    public static synchronized CompletableFuture<Result> checkAsync() {
+    /**
+     * Downloads the latest datapack when it changed. Only after the player's consent
+     * ({@code allowDownloads}), otherwise returns NOT_ALLOWED without any network access.
+     */
+    public static synchronized CompletableFuture<Result> downloadAsync() {
         CompletableFuture<Result> current = running;
         if (current != null && !current.isDone()) return current;
-        CompletableFuture<Result> f = CompletableFuture.supplyAsync(GithubUpdater::check);
+        CompletableFuture<Result> f = CompletableFuture.supplyAsync(() -> check(true));
         running = f;
         return f;
     }
 
-    private static Result check() {
+    /** Only asks GitHub for the latest commit (no file is downloaded): UP_TO_DATE or UPDATE_AVAILABLE. */
+    public static CompletableFuture<Result> checkOnlyAsync() {
+        return CompletableFuture.supplyAsync(() -> check(false));
+    }
+
+    private static Result check(boolean doDownload) {
         Settings s = settings();
-        if (!s.enabled || s.repo == null || s.repo.isBlank()) return new Result(Status.DISABLED, "GitHub update disabled");
+        if (!s.enabled || s.repo == null || s.repo.isBlank()) return new Result(Status.DISABLED, "GitHub update disabled in github.json");
+        if (doDownload && !s.allowDownloads) return new Result(Status.NOT_ALLOWED, "Download not confirmed");
         HttpClient http = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(10))
                 .followRedirects(HttpClient.Redirect.NORMAL)
@@ -131,6 +164,7 @@ public final class GithubUpdater {
             }
             String latest = shaResponse.body().strip();
             if (latest.equals(cachedCommit())) return new Result(Status.UP_TO_DATE, "Already up to date (" + shortSha(latest) + ")");
+            if (!doDownload) return new Result(Status.UPDATE_AVAILABLE, "A newer TERF datapack is on GitHub (" + shortSha(latest) + ")");
 
             // 2. download the branch, keep only data/ (the resource pack part is not needed)
             HttpRequest zipRequest = HttpRequest.newBuilder(URI.create("https://codeload.github.com/" + s.repo + "/zip/" + latest))

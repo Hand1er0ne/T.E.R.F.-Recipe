@@ -69,6 +69,10 @@ public final class MachineDefs {
         public List<String> conversionFunctions = List.of();
         /** Multiblock view: block ids to remove everywhere ("slime_block"). */
         public List<String> structureRemoveBlocks = List.of();
+        /** Multiblock view: follow "execute rotated" and literal macro arguments (symmetric giga machines). */
+        public boolean structureRotations;
+        /** Multiblock view: extra functions of the machine to read (reached through strings the mod does not follow). */
+        public List<String> structureFunctions = List.of();
         /** Multiblock view: functions of the machine not to follow (e.g. dynamic flood fills). */
         public List<String> structureIgnore = List.of();
         /** Multiblock view: lines shown under the structure. */

@@ -41,6 +41,9 @@ public final class StructureExtractor {
     private static final Pattern IGNORED_FN = Pattern.compile(
             "(^|/)(operation|complete|explosion|explode|states|visuals|particle|sound|destroy|kill|stop|shoot|finishing|reboot\\w*|ring|meltdown|detonation|emergency_controls|calculations|test)(/|$|_)");
     private static final String FLUID_PORT_FN = "terf:require/observer_fluid_checks";
+    /** Functions run when a checked block is missing (leak, failure...). */
+    private static final Pattern FAILURE_FN = Pattern.compile(
+            "^(return run )?function [a-z0-9_:/]*(leak|fail|failure|broken|invalid|error)[a-z0-9_]*(\\s|$)");
 
     /*
      * datapipes_lib turns the corner blocks of a pipe network into red_glazed_terracotta for the
@@ -95,16 +98,25 @@ public final class StructureExtractor {
         if (!usedIds.add(id)) return null;
 
         Collector c = new Collector(machine);
+        c.followRotations = defs.get(machine).structureRotations;
         // 1. core block (+ the extra conditions of the setup table)
         c.chain(checks, 0, 0, 0, Multiblock.Role.CORE, 0);
+        // the table can move the core entity away from its block ("positioned ~ ~13 ~": STFR center)
+        int[] at = checksOffset(checks);
         // 2. setup function (or inline multiblock_function)
         if (function.startsWith("function ")) {
-            c.chain(function, 0, 0, 0, Multiblock.Role.NORMAL, 0);
+            c.chain(function, at[0], at[1], at[2], Multiblock.Role.NORMAL, 0);
         } else {
-            c.line(function, 0);
+            c.line(function, 0, at[0], at[1], at[2]);
+        }
+        MachineDefs.MachineDef def = defs.get(machine);
+        // 3. functions reached through strings the mod does not follow (machines.json)
+        if (def.structureFunctions != null) {
+            for (String fn : def.structureFunctions) {
+                c.function("terf:entity/machines/" + machine + "/" + fn, at[0], at[1], at[2], 0);
+            }
         }
 
-        MachineDefs.MachineDef def = defs.get(machine);
         patch(c.blocks, def);
         if (c.blocks.isEmpty()) return null;
         String name = def.name != null ? def.name : MachineDefs.prettify(machine);
@@ -135,6 +147,12 @@ public final class StructureExtractor {
         final List<String> notes = new ArrayList<>();
         boolean dynamic;
         boolean fluidNote;
+        /** Rotation ("execute rotated") and macro arguments of the function being read. */
+        float yaw;
+        float pitch;
+        Map<String, String> args;
+        /** machines.json structureRotations: follow "rotated" and literal macro arguments. */
+        boolean followRotations;
         /** Corner block of the pipe used by the fluid entry being read. */
         String fluidCorner = FLUID_CORNER;
 
@@ -157,7 +175,7 @@ public final class StructureExtractor {
             if (IGNORED_FN.matcher(m.group(2)).find() || depth > MAX_DEPTH) return;
             List<String> ignore = defs.get(machine).structureIgnore;
             if (ignore != null) for (String ig : ignore) if (m.group(2).equals(ig) || m.group(2).endsWith("/" + ig)) return;
-            if (!visited.add(fn + "@" + ox + "," + oy + "," + oz)) return;
+            if (!visited.add(fn + "@" + ox + "," + oy + "," + oz + "/" + yaw + "," + pitch + "/" + args)) return;
             String body = functionReader.apply(fn);
             if (body == null) return;
             List<String> lines = StorageEmulator.joinContinuations(body);
@@ -187,7 +205,12 @@ public final class StructureExtractor {
                 }
             }
             for (String line : lines) {
-                if (line.startsWith("$")) continue; // macro: runtime values
+                if (line.startsWith("$")) {
+                    // macro: only readable when the caller gave the values ("function x {south:\"up\"}")
+                    if (args == null || !followRotations) continue;
+                    line = substituteMacro(line.substring(1), args);
+                    if (line == null) continue;
+                }
                 line(line, depth, ox, oy, oz);
             }
         }
@@ -217,6 +240,7 @@ public final class StructureExtractor {
         void chain(String text, int ox, int oy, int oz, Multiblock.Role role, int depth) {
             List<String> t = tokenize(text);
             int x = ox, y = oy, z = oz;
+            float yw = yaw, pt = pitch;
             // "execute unless block X run return fail" means X is REQUIRED
             // (also "... run return run <error message>")
             boolean guard = isGuard(text);
@@ -225,11 +249,11 @@ public final class StructureExtractor {
                 switch (tok) {
                     case "positioned" -> {
                         if (i + 3 < t.size() && isCoord(t.get(i + 1))) {
-                            Integer a = coord(t.get(i + 1)), b = coord(t.get(i + 2)), cc = coord(t.get(i + 3));
-                            if (a == null || b == null || cc == null) return; // absolute position
-                            x += a;
-                            y += b;
-                            z += cc;
+                            int[] off = offset(t.get(i + 1), t.get(i + 2), t.get(i + 3), yw, pt);
+                            if (off == null) return; // absolute position
+                            x += off[0];
+                            y += off[1];
+                            z += off[2];
                             i += 3;
                         } else {
                             return; // positioned as <entity>
@@ -245,7 +269,19 @@ public final class StructureExtractor {
                             return;
                         }
                     }
-                    case "rotated", "facing", "anchored", "align" -> {
+                    case "rotated" -> {
+                        // "rotated <yaw> <pitch>" (absolute or ~relative): ^ coordinates follow it.
+                        // Only for the machines that ask for it: elsewhere "rotated" is used to scan
+                        // around (conveyors, lasers...) and would add every direction
+                        if (!followRotations) return;
+                        if (i + 2 >= t.size() || t.get(i + 1).equals("as")) return;
+                        Float ny = angle(t.get(i + 1), yw), np = angle(t.get(i + 2), pt);
+                        if (ny == null || np == null) return;
+                        yw = ny;
+                        pt = np;
+                        i += 2;
+                    }
+                    case "facing", "anchored", "align" -> {
                         return; // orientation changes: local coordinates no longer comparable
                     }
                     case "if", "unless" -> {
@@ -253,12 +289,12 @@ public final class StructureExtractor {
                         if (i + 1 >= t.size()) return;
                         String kind = t.get(i + 1);
                         if (kind.equals("block") && i + 5 < t.size()) {
-                            Integer a = coord(t.get(i + 2)), b = coord(t.get(i + 3)), cc = coord(t.get(i + 4));
+                            int[] off = offset(t.get(i + 2), t.get(i + 3), t.get(i + 4), yw, pt);
                             String pred = t.get(i + 5);
-                            if (!negate && a != null && b != null && cc != null) {
+                            if (!negate && off != null) {
                                 Multiblock.Role r = role;
-                                Multiblock.Pos pos = new Multiblock.Pos(x + a, y + b, z + cc);
-                                if (role == Multiblock.Role.CORE && !(a == 0 && b == 0 && cc == 0)) r = Multiblock.Role.NORMAL;
+                                Multiblock.Pos pos = new Multiblock.Pos(x + off[0], y + off[1], z + off[2]);
+                                if (role == Multiblock.Role.CORE && !(off[0] == 0 && off[1] == 0 && off[2] == 0)) r = Multiblock.Role.NORMAL;
                                 if (spec(pred, r).id().equals(ACTIVE_PIPE)) {
                                     // an energized pipe corner: show the block the player really places
                                     if (r == Multiblock.Role.FLUID) {
@@ -275,7 +311,7 @@ public final class StructureExtractor {
                             dynamic = true;
                             i += 1;
                         } else if (kind.equals("function") && i + 2 < t.size()) {
-                            if (!negate) function(t.get(i + 2), x, y, z, depth + 1);
+                            if (!negate) call(t.get(i + 2), i + 3 < t.size() ? t.get(i + 3) : null, x, y, z, yw, pt, depth + 1);
                             if (guard && !negate) return; // "if function X run return fail": X describes what must NOT be there
                             i += 2;
                         } else {
@@ -287,7 +323,7 @@ public final class StructureExtractor {
                     }
                     case "function" -> {
                         if (i + 1 < t.size()) {
-                            function(t.get(i + 1), x, y, z, depth + 1);
+                            call(t.get(i + 1), i + 2 < t.size() ? t.get(i + 2) : null, x, y, z, yw, pt, depth + 1);
                         }
                         return;
                     }
@@ -299,6 +335,22 @@ public final class StructureExtractor {
                         // arguments of skipped sub-commands, "execute", "return"...
                     }
                 }
+            }
+        }
+
+        /** Reads a function with the caller's rotation and its literal macro arguments, if any. */
+        void call(String fn, String argsToken, int x, int y, int z, float yw, float pt, int depth) {
+            float oldYaw = yaw, oldPitch = pitch;
+            Map<String, String> oldArgs = args;
+            yaw = yw;
+            pitch = pt;
+            args = argsToken != null && argsToken.startsWith("{") ? macroArgs(argsToken) : null;
+            try {
+                function(fn, x, y, z, depth);
+            } finally {
+                yaw = oldYaw;
+                pitch = oldPitch;
+                args = oldArgs;
             }
         }
 
@@ -348,6 +400,27 @@ public final class StructureExtractor {
 
     /** Removes the "empty" blocks and applies the structureRemove / structureAdd patches of machines.json. */
     private void patch(Map<Multiblock.Pos, Multiblock.BlockSpec> blocks, MachineDefs.MachineDef def) {
+        // a checked piston head means an extended piston: show the piston itself, behind the head
+        for (Map.Entry<Multiblock.Pos, Multiblock.BlockSpec> e : new ArrayList<>(blocks.entrySet())) {
+            Multiblock.BlockSpec head = e.getValue();
+            if (!head.id().equals("minecraft:piston_head")) continue;
+            String facing = stateValue(head.states(), "facing");
+            int[] d = facing == null ? null : switch (facing) {
+                case "down" -> new int[]{0, -1, 0};
+                case "up" -> new int[]{0, 1, 0};
+                case "north" -> new int[]{0, 0, -1};
+                case "south" -> new int[]{0, 0, 1};
+                case "west" -> new int[]{-1, 0, 0};
+                case "east" -> new int[]{1, 0, 0};
+                default -> null;
+            };
+            if (d == null) continue;
+            Multiblock.Pos p = e.getKey();
+            Multiblock.Pos body = new Multiblock.Pos(p.x() - d[0], p.y() - d[1], p.z() - d[2]);
+            if (blocks.containsKey(body)) continue;
+            String piston = "sticky".equals(stateValue(head.states(), "type")) ? "sticky_piston" : "piston";
+            blocks.put(body, spec(piston + "[facing=" + facing + "]", head.role()));
+        }
         blocks.entrySet().removeIf(e -> NOT_SHOWN.contains(e.getValue().id()));
         if (def.structureRemoveBlocks != null && !def.structureRemoveBlocks.isEmpty()) {
             Set<String> ids = new HashSet<>();
@@ -367,6 +440,14 @@ public final class StructureExtractor {
                 blocks.put(new Multiblock.Pos(add.pos[0], add.pos[1], add.pos[2]), spec(add.block, role));
             }
         }
+    }
+
+    private static String stateValue(String states, String key) {
+        for (String kv : states.split(",")) {
+            int eq = kv.indexOf('=');
+            if (eq > 0 && kv.substring(0, eq).strip().equals(key)) return kv.substring(eq + 1).strip();
+        }
+        return null;
     }
 
     Multiblock.BlockSpec spec(String predicate, Multiblock.Role role) {
@@ -435,11 +516,112 @@ public final class StructureExtractor {
     }
 
     /** A chain that aborts when its conditions pass: its "unless" conditions are requirements. */
+    /** Offset of "positioned ~a ~b ~c" in the setup table's checks (where the core entity goes). */
+    static int[] checksOffset(String checks) {
+        List<String> t = tokenize(checks);
+        int[] out = new int[3];
+        for (int i = 0; i + 3 < t.size(); i++) {
+            if (!t.get(i).equals("positioned")) continue;
+            int[] off = offset(t.get(i + 1), t.get(i + 2), t.get(i + 3), 0f, 0f);
+            if (off != null) {
+                out[0] += off[0];
+                out[1] += off[1];
+                out[2] += off[2];
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Block offset of three coordinates: {@code ~} = world axes, {@code ^} = left / up / forward of
+     * the current rotation (same maths as Minecraft's local coordinates). At rotation 0 0 both are
+     * the structure frame (x = left, y = up, z = front). Null for absolute or mixed coordinates.
+     */
+    static int[] offset(String a, String b, String c, float yaw, float pitch) {
+        Double[] v = {rel(a), rel(b), rel(c)};
+        if (v[0] == null || v[1] == null || v[2] == null) return null;
+        boolean local = a.startsWith("^");
+        if (local != b.startsWith("^") || local != c.startsWith("^")) return null;
+        if (!local || (yaw == 0f && pitch == 0f)) {
+            return new int[]{(int) Math.round(v[0]), (int) Math.round(v[1]), (int) Math.round(v[2])};
+        }
+        double rad = Math.PI / 180.0;
+        double f = Math.cos((yaw + 90f) * rad), f1 = Math.sin((yaw + 90f) * rad);
+        double f2 = Math.cos(-pitch * rad), f3 = Math.sin(-pitch * rad);
+        double f4 = Math.cos((-pitch + 90f) * rad), f5 = Math.sin((-pitch + 90f) * rad);
+        double[] fwd = {f * f2, f3, f1 * f2};
+        double[] up = {f * f4, f5, f1 * f4};
+        // left = -(forward x up)
+        double[] left = {-(fwd[1] * up[2] - fwd[2] * up[1]), -(fwd[2] * up[0] - fwd[0] * up[2]), -(fwd[0] * up[1] - fwd[1] * up[0])};
+        int[] out = new int[3];
+        for (int k = 0; k < 3; k++) out[k] = (int) Math.round(left[k] * v[0] + up[k] * v[1] + fwd[k] * v[2]);
+        return out;
+    }
+
+    private static Double rel(String s) {
+        if (s.isEmpty() || (s.charAt(0) != '^' && s.charAt(0) != '~')) return null;
+        String n = s.substring(1);
+        if (n.isEmpty()) return 0.0;
+        try {
+            return Double.parseDouble(n);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    /** "90" (absolute) or "~90" (relative to the current angle). */
+    private static Float angle(String s, float current) {
+        try {
+            if (s.startsWith("~")) return current + (s.length() == 1 ? 0f : Float.parseFloat(s.substring(1)));
+            return Float.parseFloat(s);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    /** {@code {south:"up",tag:"x"}} -> strings (other values are written back as SNBT). */
+    static Map<String, String> macroArgs(String token) {
+        try {
+            if (Snbt.parse(token) instanceof Map<?, ?> m) {
+                Map<String, String> out = new LinkedHashMap<>();
+                for (Map.Entry<?, ?> e : m.entrySet()) {
+                    Object v = e.getValue();
+                    out.put(String.valueOf(e.getKey()), v instanceof String str ? str : Snbt.write(v));
+                }
+                return out;
+            }
+        } catch (RuntimeException ignored) {
+        }
+        return null;
+    }
+
+    /** Replaces the $(name) of a macro line, or null when a value is unknown. */
+    static String substituteMacro(String line, Map<String, String> args) {
+        StringBuilder sb = new StringBuilder();
+        int i = 0;
+        while (i < line.length()) {
+            int start = line.indexOf("$(", i);
+            if (start < 0) {
+                sb.append(line, i, line.length());
+                break;
+            }
+            int end = line.indexOf(')', start);
+            if (end < 0) return null;
+            String value = args.get(line.substring(start + 2, end));
+            if (value == null) return null;
+            sb.append(line, i, start).append(value);
+            i = end + 1;
+        }
+        return sb.toString();
+    }
+
     static boolean isGuard(String chain) {
         int run = chain.indexOf(" run ");
         if (run < 0) return false;
         String cmd = chain.substring(run + 5).strip();
         if (cmd.equals("return fail") || cmd.equals("return 0")) return true;
+        // "unless block X run function .../at_leak": the machine breaks when X is missing
+        if (FAILURE_FN.matcher(cmd).find()) return true;
         return cmd.startsWith("return run ") && !cmd.startsWith("return run function") && !cmd.startsWith("return run execute");
     }
 
