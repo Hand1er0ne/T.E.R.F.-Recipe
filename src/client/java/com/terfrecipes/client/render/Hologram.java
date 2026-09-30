@@ -46,7 +46,8 @@ import java.util.Set;
  *     <li>anchored on the block the player looks at (where the Multiblock Core goes), turned so
  *     that the core faces the player, like the datapack does when the core is placed;</li>
  *     <li>blocks already placed correctly disappear, wrong ones are shown in red;</li>
- *     <li>keys (rebindable, "TERF Recipes" category): rotate, layer by layer, move here, remove.</li>
+ *     <li>keys (rebindable, "TERF Recipes" category): rotate, layer by layer, move here, remove,
+ *     move one block up / down / forward / back / left / right.</li>
  * </ul>
  * Everything is client side, so it also works on servers without the mod.
  */
@@ -55,6 +56,8 @@ public final class Hologram {
     private static final int GHOST_COLOR = 0x88C8E6FF;   // missing block: light blue, translucent
     private static final int WRONG_COLOR = 0xCCFF3030;   // another block is there: red
     private static final int FULL_BRIGHT = 0xF000F0;
+    /** Ghost blocks further than this are not drawn (the status still counts them). */
+    private static final int MAX_DRAW_DISTANCE = 64;
     /** Local properties whose value depends on the structure's orientation (checked after rotation). */
     private static final Set<String> ORIENTED = Set.of("facing", "axis", "rotation", "shape", "hinge", "face");
 
@@ -62,6 +65,12 @@ public final class Hologram {
     private static KeyMapping layerKey;
     private static KeyMapping moveKey;
     private static KeyMapping clearKey;
+    private static KeyMapping upKey;
+    private static KeyMapping downKey;
+    private static KeyMapping forwardKey;
+    private static KeyMapping backKey;
+    private static KeyMapping leftKey;
+    private static KeyMapping rightKey;
 
     private static @Nullable Multiblock shown;
     private static BlockPos anchor = BlockPos.ZERO;
@@ -84,6 +93,13 @@ public final class Hologram {
                 InputConstants.Type.KEYSYM, InputConstants.KEY_G, category));
         clearKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.terf-recipes.hologram_clear",
                 InputConstants.Type.KEYSYM, InputConstants.KEY_H, category));
+        // fine positioning, one block per press (horizontal moves follow where the player looks)
+        upKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.terf-recipes.hologram_up", InputConstants.KEY_PAGEUP, category));
+        downKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.terf-recipes.hologram_down", InputConstants.KEY_PAGEDOWN, category));
+        forwardKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.terf-recipes.hologram_forward", InputConstants.KEY_UP, category));
+        backKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.terf-recipes.hologram_back", InputConstants.KEY_DOWN, category));
+        leftKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.terf-recipes.hologram_left", InputConstants.KEY_LEFT, category));
+        rightKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.terf-recipes.hologram_right", InputConstants.KEY_RIGHT, category));
         ClientTickEvents.END_CLIENT_TICK.register(Hologram::tick);
         LevelRenderEvents.COLLECT_SUBMITS.register(Hologram::render);
     }
@@ -105,7 +121,8 @@ public final class Hologram {
             mc.player.sendSystemMessage(Component.literal("[TERF Recipes] ").withStyle(ChatFormatting.GOLD)
                     .append(Component.literal(mb.name() + " shown in the world. ").withStyle(ChatFormatting.WHITE))
                     .append(Component.literal("[" + keyName(rotateKey) + "] rotate  [" + keyName(layerKey) + "] layers  ["
-                            + keyName(moveKey) + "] move here  [" + keyName(clearKey) + "] remove").withStyle(ChatFormatting.GRAY)));
+                            + keyName(moveKey) + "] move here  [" + keyName(clearKey) + "] remove  ["
+                            + keyName(upKey) + "/" + keyName(downKey) + "] up/down  [arrows] move 1 block").withStyle(ChatFormatting.GRAY)));
         }
     }
 
@@ -142,6 +159,17 @@ public final class Hologram {
         while (rotateKey.consumeClick()) if (active) rotation = rotation.getRotated(Rotation.CLOCKWISE_90);
         while (moveKey.consumeClick()) if (active) placeHere();
         while (clearKey.consumeClick()) if (active) clear();
+        while (upKey.consumeClick()) if (active) anchor = anchor.above();
+        while (downKey.consumeClick()) if (active) anchor = anchor.below();
+        if (active) {
+            Direction facing = mc.player.getDirection();
+            while (forwardKey.consumeClick()) anchor = anchor.relative(facing);
+            while (backKey.consumeClick()) anchor = anchor.relative(facing.getOpposite());
+            while (leftKey.consumeClick()) anchor = anchor.relative(facing.getCounterClockWise());
+            while (rightKey.consumeClick()) anchor = anchor.relative(facing.getClockWise());
+        } else {
+            for (KeyMapping k : new KeyMapping[]{forwardKey, backKey, leftKey, rightKey}) while (k.consumeClick()) { }
+        }
         while (layerKey.consumeClick()) {
             if (!active) continue;
             int count = shown.maxY() - shown.minY() + 1;
@@ -253,6 +281,8 @@ public final class Hologram {
             for (Map.Entry<Multiblock.Pos, BlockState> e : chosen.entrySet()) {
                 Multiblock.Pos p = e.getKey();
                 BlockPos wp = worldPos(p);
+                double dx = wp.getX() + 0.5 - cam.x, dy = wp.getY() + 0.5 - cam.y, dz = wp.getZ() + 0.5 - cam.z;
+                if (dx * dx + dy * dy + dz * dz > MAX_DRAW_DISTANCE * MAX_DRAW_DISTANCE) continue; // giga machines: only around the player
                 BlockState there = level.getBlockState(wp);
                 if (matches(mb.blocks().get(p), there)) continue; // already built
                 boolean wrong = !there.isAir() && !there.canBeReplaced();

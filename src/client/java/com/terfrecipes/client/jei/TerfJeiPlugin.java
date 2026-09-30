@@ -194,6 +194,40 @@ public class TerfJeiPlugin implements IModPlugin {
         runtime = jeiRuntime;
         hideGrindstoneRepairs(jeiRuntime);
         DatapackVanillaRecipes.hideOverridden(jeiRuntime);
+        addMissingVanillaItems(jeiRuntime, TerfDataManager.data());
+    }
+
+    /**
+     * TERF gives new looks to vanilla items that are in no creative tab (e.g. the Copper Coil is a
+     * petrified oak slab), so JEI does not list them: no search, no R / U. Adds every plain vanilla
+     * item used by a TERF recipe that JEI does not know yet.
+     */
+    private static void addMissingVanillaItems(IJeiRuntime rt, TerfData data) {
+        try {
+            Set<net.minecraft.world.item.Item> known = new java.util.HashSet<>();
+            for (ItemStack s : rt.getIngredientManager().getAllItemStacks()) known.add(s.getItem());
+            Map<net.minecraft.world.item.Item, ItemStack> missing = new java.util.LinkedHashMap<>();
+            java.util.function.Consumer<ItemStack> check = s -> {
+                if (s == null || s.isEmpty() || known.contains(s.getItem()) || missing.containsKey(s.getItem())) return;
+                if (ItemResolver.subtypeOf(s) != null) return; // TERF items are already listed
+                missing.put(s.getItem(), new ItemStack(s.getItem()));
+            };
+            for (List<TerfRecipe> recipes : data.recipesByMachine().values()) {
+                for (TerfRecipe r : recipes) {
+                    for (TerfRecipe.Input in : r.inputs()) {
+                        if (in.kind() == TerfRecipe.InputKind.ITEM) ItemResolver.resolveInput(in).forEach(check);
+                    }
+                    for (TerfRecipe.Output out : r.outputs()) check.accept(ItemResolver.resolveOutput(out));
+                }
+            }
+            if (!missing.isEmpty()) {
+                rt.getIngredientManager().addIngredientsAtRuntime(mezz.jei.api.constants.VanillaTypes.ITEM_STACK, new ArrayList<>(missing.values()));
+                TERFRecipes.LOGGER.info("[TERF Recipes] Added {} item(s) missing from the creative tabs to JEI: {}",
+                        missing.size(), missing.keySet().stream().map(i -> net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(i).toString()).toList());
+            }
+        } catch (RuntimeException e) {
+            TERFRecipes.LOGGER.debug("[TERF Recipes] Could not add the missing items", e);
+        }
     }
 
     /**
@@ -262,6 +296,7 @@ public class TerfJeiPlugin implements IModPlugin {
             shownPages = MultiblockCategory.pages(structures);
             if (!shownPages.isEmpty()) rt.getRecipeManager().addRecipes(MultiblockCategory.TYPE, new ArrayList<>(shownPages));
         }
+        addMissingVanillaItems(rt, data);
         return missing;
     }
 

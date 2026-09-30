@@ -18,7 +18,7 @@ In this order (the first source found wins):
 2. **`config/terf-recipes/`**: a `startup.mcfunction`, or the datapack zip / folder.
 3. **Server resource pack**: when the server sends the full TERF zip (assets + data) as its
    resource pack, the mod reads it from `.minecraft/downloads`.
-4. **GitHub copy**: downloaded from the datapack repository (see below).
+4. **GitHub copy**: downloaded from the datapack repository when you ask for it (see below).
 5. **Copy bundled in the mod**: copied from `TERF_datapack/` at every build.
 
 > A server never sends its `.mcfunction` files to clients: in multiplayer, sources 2 to 5 are
@@ -27,12 +27,20 @@ In this order (the first source found wins):
 
 ## Updating from GitHub
 
-When the game starts (in the background) and with `/terfrecipes update`, the mod compares the
-latest commit of https://github.com/jona23EE/TERF_datapack (`main` branch) with its local copy
-in `config/terf-recipes/github/`. When it changed, the repository is downloaded and only its
-`data/` folder is kept. This copy replaces the bundled one; the world / server datapack (and
-files put in `config/terf-recipes/`) still win. Settings: `config/terf-recipes/github.json`
-(`enabled`, `repo`, `branch`, `path`, `checkOnStartup`).
+The mod never downloads anything on its own. `/terfrecipes update` first explains what would be
+downloaded (the datapack repository https://github.com/jona23EE/TERF_datapack, `main` branch,
+about 1-2 MB, only its `data/` .json / .mcfunction files are kept in
+`config/terf-recipes/github/`) and waits for a click on **[Download now]**
+(`/terfrecipes update confirm`). After that, `/terfrecipes update` downloads the latest version
+when it changed.
+
+- `/terfrecipes update startup on`: when the game starts, ask GitHub for the latest version and say
+  in the chat when a newer one exists (the download still waits for a click).
+- `/terfrecipes update disable`: no more downloads or startup check.
+
+The downloaded copy replaces the bundled one; the world / server datapack (and files put in
+`config/terf-recipes/`) still win. Settings: `config/terf-recipes/github.json` (`enabled`,
+`allowDownloads`, `repo`, `branch`, `path`, `notifyOnStartup`).
 
 ## What is shown
 
@@ -87,7 +95,8 @@ On a structure page, **Show in world** shows the structure as ghost blocks on th
 looking at (where the Multiblock Core goes), turned so that the core faces you. Blocks placed
 correctly disappear, wrong ones turn red, and the action bar counts what is missing.
 Keys (rebindable, "TERF Recipes" category): **R** rotate, **J** layer by layer, **G** move here,
-**H** remove (or `/terfrecipes hologram clear`). Client side only: works on any server.
+**H** remove (or `/terfrecipes hologram clear`), **Page Up / Page Down** one block up / down,
+**arrows** one block forward / back / left / right. Client side only: works on any server.
 
 ## Fabricator "+" button
 
@@ -121,7 +130,7 @@ items; water / lava are real source blocks in the 3D view.
 - `/terfrecipes`: number of recipes / items and the source in use
 - `/terfrecipes reload`: reads the datapack again and updates JEI without restarting
   (a *new* machine needs a rejoin to get its tab)
-- `/terfrecipes update`: checks GitHub and reloads when a newer datapack is available
+- `/terfrecipes update`: downloads the latest datapack from GitHub, after your confirmation (see above)
 - `/terfrecipes hologram clear`: removes the hologram
 
 ## Customising
